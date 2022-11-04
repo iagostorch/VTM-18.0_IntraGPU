@@ -46,6 +46,7 @@
 
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/dtrace_buffer.h"
+#include "storchmain.h"
 
 #include <math.h>
 #include <limits>
@@ -1003,6 +1004,17 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 pu.mipTransposedFlag           = isTransposed;
                 pu.intraDir[CHANNEL_TYPE_LUMA] = mode;
                 predIntraMip(COMPONENT_Y, piPred, pu);
+                
+                // Target at one specific CU to extract the predicted samples during MIP
+                int target = 1;
+                target &= pu.lwidth()== 64;
+                target &= pu.lheight()==64;
+                target &= pu.lx()==64
+                target &= pu.ly()==64
+                
+                if(EXTRACT_predictedBlock && target){
+                  storch::exportSamplesBlock_v2(piPred, EXT_PREDICTED);
+                }
 
                 // Use the min between SAD and HAD as the cost criterion
                 // SAD is scaled by 2 to align with the scaling of HAD

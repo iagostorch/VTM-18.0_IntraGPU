@@ -40,6 +40,7 @@
 #include "EncLib.h"
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/Picture.h"
+#include "storchmain.h"
 #if K0149_BLOCK_STATISTICS
 #include "CommonLib/dtrace_blockstatistics.h"
 #endif
@@ -1481,6 +1482,17 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
 
   Slice* const pcSlice    = pcPic->slices[getSliceSegmentIdx()];
 
+  if(EXTRACT_frames){
+    int currPOC = pcSlice->getPic()->getPOC();
+    // True original is the input .yuv video, original represents the filtered input samples that are used as "being the original"
+    PelBuf originalFrame = pcSlice->getPic()->getOrigBuf(COMPONENT_Y);
+    PelBuf trueOriginalFrame = pcSlice->getPic()->getTrueOrigBuf(COMPONENT_Y);
+    
+    // Extract the current frame
+    storch::exportSamplesFrame(originalFrame, currPOC, EXT_ORIGINAL);
+    storch::exportSamplesFrame(trueOriginalFrame, currPOC, EXT_TRUE_ORIGINAL);
+  }
+  
   if (pcSlice->getSPS()->getSpsRangeExtension().getRrcRiceExtensionEnableFlag())
   {
     int bitDepth = pcSlice->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA);
@@ -1577,6 +1589,14 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
   if (checkPLTRatio)
   {
     m_pcLib->checkPltStats(pcPic);
+  }
+  
+  // At this point the entire frame was predicted, but it did not pass through in-loop filters yet. This frame will be filtered before producing the final "reconstructed" frame
+  if(EXTRACT_frames){
+    PelBuf predictedFrame = pcSlice->getPic()->getRecoBuf(COMPONENT_Y, false);
+    int currPOC = pcSlice->getPic()->getPOC();
+    
+    storch::exportSamplesFrame(predictedFrame, currPOC, EXT_PREDICTED);
   }
 }
 

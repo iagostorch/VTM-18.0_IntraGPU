@@ -59,6 +59,8 @@
 
 #include "DecoderLib/DecLib.h"
 
+#include "CommonLib/storchmain.h"
+
 using namespace std;
 
 //! \ingroup EncoderLib
@@ -3690,6 +3692,15 @@ void EncGOP::compressGOP(int pocLast, int numPicRcvd, PicList &rcListPic, std::l
       }
     }
 
+    // At this point the current frame was already filtered and passed by in-loop filters 
+    // This is the final reconstructed frame
+    if(EXTRACT_frames){
+      int currPOC = pcSlice->getPic()->getPOC();
+      PelBuf reconstructedFrame = pcSlice->getPic()->getRecoBuf(COMPONENT_Y);
+      
+      storch::exportSamplesFrame(reconstructedFrame, currPOC, EXT_RECONSTRUCTED);
+    }
+        
     pcSlice->freeScaledRefPicList( scaledRefPic );
 
     if( m_pcCfg->getUseAMaxBT() )

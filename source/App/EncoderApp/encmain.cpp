@@ -44,6 +44,8 @@
 #include "EncApp.h"
 #include "Utilities/program_options_lite.h"
 
+#include "../../Lib/CommonLib/storchmain.h"
+
 //! \ingroup EncoderApp
 //! \{
 
@@ -212,6 +214,10 @@ int main(int argc, char* argv[])
   printMacroSettings();
 #endif
 
+  #ifdef STORCHMAIN_H
+      storch();
+  #endif
+  
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -324,6 +330,8 @@ int main(int argc, char* argv[])
          encTime / 1000.0);
 #endif
 
+  storch::finishEncoding();
+  
   return 0;
 }
 
