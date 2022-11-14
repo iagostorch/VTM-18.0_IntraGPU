@@ -50,6 +50,105 @@
 
 #include <math.h>
 #include <limits>
+
+// TODO: Move this to class storchmain
+// Used for debugging purposes. Print the name of the input encoding mode
+void translateEncTestModeType(EncTestModeType t){
+  
+  switch(t){
+    case(ETM_HASH_INTER):
+      printf("ETM_HASH_INTER,");
+      break;
+    case(ETM_MERGE_SKIP):
+      printf("ETM_MERGE_SKIP,");
+      break;
+    case(ETM_INTER_ME):
+      printf("ETM_INTER_ME,");
+      break;
+    case(ETM_AFFINE):
+      printf("ETM_AFFINE,");
+      break;
+    case(ETM_MERGE_GEO):
+      printf("ETM_MERGE_GEO,");
+      break;
+    case(ETM_INTRA):
+      printf("ETM_INTRA,");
+      break;
+    case(ETM_PALETTE):
+      printf("ETM_PALETTE,");
+      break;
+    case(ETM_SPLIT_QT):
+      printf("ETM_SPLIT_QT,");
+      break;
+    case(ETM_SPLIT_BT_H):
+      printf("ETM_SPLIT_BT_H,");
+      break;
+    case(ETM_SPLIT_BT_V):
+      printf("ETM_SPLIT_BT_V,");
+      break;
+    case(ETM_SPLIT_TT_H):
+      printf("ETM_SPLIT_TT_H,");
+      break;
+    case(ETM_SPLIT_TT_V):
+      printf("ETM_SPLIT_TT_V,");
+      break;      
+    
+    case(ETM_POST_DONT_SPLIT):
+      printf("ETM_POST_DONT_SPLIT,");
+      break; 
+    #if REUSE_CU_RESULTS
+    case(ETM_RECO_CACHED):
+      printf("ETM_RECO_CACHED,");
+      break; 
+    #endif
+    case(ETM_TRIGGER_IMV_LIST):
+      printf("ETM_TRIGGER_IMV_LIST,");
+      break; 
+    case(ETM_IBC):
+      printf("ETM_IBC,");
+      break;  
+    case(ETM_IBC_MERGE):
+      printf("ETM_IBC_MERGE,");
+      break;   
+    case(ETM_INVALID):
+      printf("ETM_INVALID,");
+      break;         
+  }
+  
+  return;
+}
+
+// TODO: Move this to class storchmain
+// Used for debugging purposes. Print the name of input partition mode
+void translatePartSplit(PartLevel p){
+  switch(p.split){
+    case(CTU_LEVEL):
+      printf("R,");
+      break;
+    case(CU_QUAD_SPLIT):
+      printf("QT,");
+      break;
+    case(CU_HORZ_SPLIT):
+      printf("BH,");
+      break;
+    case(CU_VERT_SPLIT):
+      printf("BV,");
+      break;
+    case(CU_TRIH_SPLIT):
+      printf("TH,");
+      break;
+    case(CU_TRIV_SPLIT):
+      printf("TV,");
+      break;
+    default:
+      printf("%d,",p.split);
+      break;
+
+  }
+    
+}
+
+
  //! \ingroup EncoderLib
  //! \{
 #define PLTCtx(c) SubCtx( Ctx::Palette, c )
@@ -615,6 +714,30 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 #if GDR_ENABLED
   const bool isEncodeGdrClean = cs.sps->getGDREnabledFlag() && cs.pcv->isEncoder && cs.picHeader->getInGdrInterval() && cs.isClean(pu.Y().topRight(), CHANNEL_TYPE_LUMA);
 #endif
+  
+  if(TRACE_estIntraPredLumaQT 
+    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+  ){
+    printf("estIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
+  
+    PartitioningStack z = partitioner.getPartStack();
+
+    // Print the sequence of splits (QT, TH, TV, BH, BV) that led to the current CU
+    for(int i=0; i<z.size(); i++){
+      PartLevel part = z.at(i);
+      translatePartSplit(part);
+    }
+    printf("|||");
+
+//    std::cout << partitioner.getSplitSeries();
+//    
+//    printf("|||");
+    
+    printf("MTS=%d, testISP=%d,saveDataForISP=%d,lfnstSaveFlag=%d,lfnstLoadFlag=%d\n", mtsUsageFlag, testISP, saveDataForISP, lfnstSaveFlag, lfnstLoadFlag);
+  }
+  
+  
   bool validReturn = false;
   {
     candHadList.clear();
@@ -971,6 +1094,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             //*** Derive MIP candidates using Hadamard
             if (testMip && !supportedMipBlkSize)
             {
+              if(TRACE_estIntraPredLumaQT 
+                && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+                && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+              ){
+                printf("..Going into unsupported RMD MIP\n");
+              }
+              
               // avoid estimation for unsupported blk sizes
               const int transpOff    = getNumModesMip(pu.Y());
               const int numModesFull = (transpOff << 1);
@@ -986,16 +1116,41 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             }
             else if (testMip)
             {
+              
+              if(TRACE_estIntraPredLumaQT 
+                && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+                && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+              ){
+                printf(".. >> Going into supported RMD MIP. %d modes FULL\n", getNumModesMip(pu.Y())<<1);
+              }
               cu.mipFlag     = true;
               pu.multiRefIdx = 0;
 
               double mipHadCost[MAX_NUM_MIP_MODE] = { MAX_DOUBLE };
 
+              
+              // Target at one specific CU to extract the predicted samples during MIP
+              int target = 1;
+              
+             // Trace this CU size?
+             target &= ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) );
+             // Trace this CU position?
+             target &= ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()));
+             // Toggle the custom variable to trace other encoding stages accordingly
+             storch::targetBlock = target; 
+              
+              
+             // At this point the reference samples are derived
               initIntraPatternChType(cu, pu.Y());
               initIntraMip(pu, pu.Y());
 
               const int transpOff    = getNumModesMip(pu.Y());
               const int numModesFull = (transpOff << 1);
+              
+              if(EXTRACT_predictedBlock && target){
+                storch::exportSamplesBlock_v2(pu.cu->cs->getOrgBuf(COMPONENT_Y), EXT_ORIGINAL, pu.lx(), pu.ly());
+              }
+                      
               for (uint32_t modeFull = 0; modeFull < numModesFull; modeFull++)
               {
                 const bool     isTransposed = (modeFull >= transpOff ? true : false);
@@ -1005,22 +1160,23 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 pu.intraDir[CHANNEL_TYPE_LUMA] = mode;
                 predIntraMip(COMPONENT_Y, piPred, pu);
                 
-                // Target at one specific CU to extract the predicted samples during MIP
-                int target = 1;
-                target &= pu.lwidth()== 64;
-                target &= pu.lheight()==64;
-                target &= pu.lx()==64
-                target &= pu.ly()==64
+
                 
                 if(EXTRACT_predictedBlock && target){
-                  storch::exportSamplesBlock_v2(piPred, EXT_PREDICTED);
+                  string suffix = (string) (isTransposed ? "T1" : "T0");
+                  suffix += "_mode" + std::to_string(mode);
+                  
+                  storch::exportSamplesBlock_v2(piPred, EXT_PREDICTED, pu.lx(), pu.ly(), suffix);
                 }
 
                 // Use the min between SAD and HAD as the cost criterion
-                // SAD is scaled by 2 to align with the scaling of HAD
+                // SAD is scaled by 2 to align with the scaling of HAD               
                 Distortion minSadHad =
                   std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
 
+                if(storch::targetBlock)
+                  printf("SAD distortion PRE x2 SCALE %ld\n\n", distParamSad.distFunc(distParamSad));
+                
                 m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);
 
                 uint64_t fracModeBits = xFracModeBitsIntra(pu, mode, CHANNEL_TYPE_LUMA);
@@ -1058,6 +1214,15 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
               const double thresholdHadCost = 1.0 + 1.4 / sqrt((double) (pu.lwidth() * pu.lheight()));
               reduceHadCandList(rdModeList, candCostList, numModesForFullRD, thresholdHadCost, mipHadCost, pu, fastMip);
+              
+              if(TRACE_estIntraPredLumaQT 
+                && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
+                && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
+              ){
+                printf(".. << Leaving supported RMD MIP. %d modes FULL\n", numModesFull);
+                // Disable trace after RMD
+                storch::targetBlock = 0;
+              }
             }
             if (sps.getUseMIP() && lfnstSaveFlag)
             {
@@ -1317,6 +1482,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
     }
     int bestLfnstIdx = cu.lfnstIdx;
 
+    if(TRACE_estIntraPredLumaQT 
+      && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
+      && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
+    ){
+      printf(".. >> Going into RDO with %d MODES\n", (int) rdModeList.size());
+    }
+    
     for (int mode = isSecondColorSpace ? 0 : -2 * int(testBDPCM); mode < (int) rdModeList.size(); mode++)
     {
       // set CU/PU to luma prediction mode
@@ -1534,6 +1706,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       {
         CHECK(pu.intraDir[CHANNEL_TYPE_CHROMA] != DM_CHROMA_IDX, "chroma should use DM mode for adaptive color transform");
       }
+    }
+    if(TRACE_estIntraPredLumaQT 
+      && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
+      && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
+    ){
+      printf(".. << Leaving RDO with %d MODES\n", (int) rdModeList.size());
     }
   }
 

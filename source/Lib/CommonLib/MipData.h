@@ -38,6 +38,9 @@
 static const uint8_t MIP_SHIFT_MATRIX  =  6;
 static const uint8_t MIP_OFFSET_MATRIX = 32;
 
+// 16 matrices (pred modes)
+// Each line of each matrix is used to compute one sample of the predicted block. All 4 coefficients in the same line are used to predict a single sample
+// Predicted block has 4x4 samples (16 samples total)
 ALIGN_DATA(MEMORY_ALIGN_DEF_SIZE, const uint8_t mipMatrix4x4[16][16][4]) =
 {
   {
@@ -330,6 +333,10 @@ ALIGN_DATA(MEMORY_ALIGN_DEF_SIZE, const uint8_t mipMatrix4x4[16][16][4]) =
   }
 };
 
+
+// 8 matrices (pred modes)
+// Each line of each matrix is used to compute one sample of the predicted block. All 8 coefficients in the same line are used to predict a single sample
+// Predicted block has 4x4 samples (16 samples total)
 ALIGN_DATA(MEMORY_ALIGN_DEF_SIZE, const uint8_t mipMatrix8x8[8][16][8]) =
 {
   {
@@ -478,6 +485,10 @@ ALIGN_DATA(MEMORY_ALIGN_DEF_SIZE, const uint8_t mipMatrix8x8[8][16][8]) =
   }
 };
 
+// 6 matrices (pred modes)
+// Each line of each matrix is used to compute one sample of the predicted block. All 8**** coefficients in the same line are used to predict a single sample
+// Predicted block has 8x8 samples (64 samples total)
+// **** IMPORTANT: The first coefficient of all lines is zero, therefore only 7 (seven) coefficients per line are kept in the matrix
 ALIGN_DATA(MEMORY_ALIGN_DEF_SIZE, const uint8_t mipMatrix16x16[6][64][7]) =
 {
   {

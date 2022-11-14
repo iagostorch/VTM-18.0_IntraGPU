@@ -131,6 +131,8 @@ void RdCost::lambdaAdjustColorTrans(bool forward, ComponentID componentID, bool 
 // Initialize Function Pointer by [eDFunc]
 void RdCost::init()
 {
+  // The array of distortion functions is initialized at this point
+  // It only works for SIMD=0. When SIMD is enabled a different set of functions are used instead (CommonLib/x86/RdCostX86.h)
   m_afpDistortFunc[DF_SSE    ] = RdCost::xGetSSE;
   m_afpDistortFunc[DF_SSE2   ] = RdCost::xGetSSE;
   m_afpDistortFunc[DF_SSE4   ] = RdCost::xGetSSE4;
@@ -320,7 +322,7 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf &org, const CPelBuf &c
   rcDP.compID       = compID;
 
   const int DFOffset = ( rcDP.useMR ? DF_MRSAD - DF_SAD : 0 );
-
+  
   if( !useHadamard )
   {
     if( org.width == 12 )
@@ -495,7 +497,7 @@ Distortion RdCost::xGetSAD( const DistParam& rcDtParam )
   const int      strideCur       = rcDtParam.cur.stride * subStep;
   const int      strideOrg       = rcDtParam.org.stride * subStep;
   const uint32_t distortionShift = DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
-
+ 
   Distortion sum = 0;
 
   for (; rows != 0; rows -= subStep)
@@ -836,7 +838,7 @@ Distortion RdCost::xGetSAD64( const DistParam &rcDtParam )
   int        subStep    = (1 << subShift);
   int        strideCur  = rcDtParam.cur.stride * subStep;
   int        strideOrg  = rcDtParam.org.stride * subStep;
-
+  
   Distortion sum = 0;
 
   for (; rows != 0; rows -= subStep)

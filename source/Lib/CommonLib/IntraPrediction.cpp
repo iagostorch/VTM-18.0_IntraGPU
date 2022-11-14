@@ -48,6 +48,8 @@
 
 #include "CommonLib/InterpolationFilter.h"
 
+#include "CommonLib/storchmain.h"
+
 //! \ingroup CommonLib
 //! \{
 
@@ -786,6 +788,7 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
     initPredIntraParams(*cu.firstPU, area, *cs.sps);
   }
 
+  // These buffers have dimensions [(MAX_CU_SIZE * 2 + 1 + MAX_REF_LINE_IDX) * 2];
   Pel *refBufUnfiltered = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
   Pel *refBufFiltered   = m_refBuffer[area.compID][PRED_BUF_FILTERED];
 
@@ -793,10 +796,22 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
 
   // ----- Step 1: unfiltered reference samples -----
   xFillReferenceSamples( cs.picture->getRecoBuf( area ), refBufUnfiltered, area, cu );
+  if(TRACE_estIntraPredLumaQT 
+          && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+          && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+    ){
+        storch::exportIntraReferences(refBufUnfiltered, cu, INTRA_REF_UNFILTERED);
+  }
   // ----- Step 2: filtered reference samples -----
   if( m_ipaParam.refFilterFlag || forceRefFilterFlag )
   {
     xFilterReferenceSamples( refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.firstPU->multiRefIdx );
+    if(TRACE_estIntraPredLumaQT 
+          && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+          && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+    ){
+      storch::exportIntraReferences(refBufFiltered, cu, INTRA_REF_FILTERED);
+    }
   }
 }
 
@@ -927,15 +942,16 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
 
   const int multiRefIdx = (area.compID == COMPONENT_Y) ? cu.firstPU->multiRefIdx : 0;
 
-  const int tuWidth    = area.width;
+  const int tuWidth    = area.width; // Same as CU width and height
   const int tuHeight   = area.height;
-  const int predSize   = m_topRefLength;
+  const int predSize   = m_topRefLength; // 2x the CU width and height
   const int predHSize  = m_leftRefLength;
-  const int predStride = predSize + 1 + multiRefIdx;
-
+  const int predStride = predSize + 1 + multiRefIdx; // CU width + 1 (top-left) + MRL offset
+  
   m_refBufferStride[area.compID] = predStride;
 
   const bool noShift   = pcv.noChroma2x2 && area.width == 4;   // don't shift on the lowest level (chroma not-split)
+  // Unit is always 4x4 for LUMA INTRA
   const int  unitWidth = tuWidth <= 2 && cu.ispMode && isLuma(area.compID)
                            ? tuWidth
                            : pcv.minCUWidth >> (noShift ? 0 : getComponentScaleX(area.compID, sps.getChromaFormatIdc()));
@@ -944,31 +960,64 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
        ? tuHeight
        : pcv.minCUHeight >> (noShift ? 0 : getComponentScaleY(area.compID, sps.getChromaFormatIdc()));
 
+  // Units above (including above-right), to the left (including below-left), and at the top-left corner of the current CU
+  // These are the references that will be used for prediction
   const int  totalAboveUnits    = (predSize + (unitWidth - 1)) / unitWidth;
   const int  totalLeftUnits     = (predHSize + (unitHeight - 1)) / unitHeight;
   const int  totalUnits         = totalAboveUnits + totalLeftUnits + 1; //+1 for top-left
+  // Here the directly above and above-right (directly left and below-left) are counted separately
   const int  numAboveUnits      = std::max<int>( tuWidth / unitWidth, 1 );
   const int  numLeftUnits       = std::max<int>( tuHeight / unitHeight, 1 );
   const int  numAboveRightUnits = totalAboveUnits - numAboveUnits;
   const int  numLeftBelowUnits  = totalLeftUnits - numLeftUnits;
 
+  if(TRACE_estIntraPredLumaQT 
+    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+  ){
+    printf(".... Availability results:\n");
+    printf(".... | tuWidth ____________ %d\n", tuWidth);
+    printf(".... | tuHeight ___________ %d\n", tuHeight);
+    printf(".... | predSize ___________ %d\n", predSize);
+    printf(".... | predHSize __________ %d\n", predHSize);
+    printf(".... | predStride _________ %d\n", predStride);
+    printf(".... | unitWidth __________ %d\n", unitWidth);
+    printf(".... | unitHeight _________ %d\n", unitHeight);
+    printf(".... | totalAboveUnits ____ %d\n", totalAboveUnits);
+    printf(".... | totalLeftUnits _____ %d\n", totalLeftUnits);
+    printf(".... | totalUnits _________ %d\n", totalUnits);
+    printf(".... | numAboveUnits ______ %d\n", numAboveUnits);
+    printf(".... | numLeftUnits _______ %d\n", numLeftUnits);
+    printf(".... | numAboveRightUnits _ %d\n", numAboveRightUnits);
+    printf(".... | numLeftBelowUnits __ %d\n", numLeftBelowUnits);
+  }
+  
   CHECK( numAboveUnits <= 0 || numLeftUnits <= 0 || numAboveRightUnits <= 0 || numLeftBelowUnits <= 0, "Size not supported" );
 
   // ----- Step 1: analyze neighborhood -----
+  // Coordinates of the top-left, top-right and bottom-left samples OF THE CURRENT CU
   const Position posLT = area;
   const Position posRT = area.topRight();
   const Position posLB = area.bottomLeft();
 
-  bool neighborFlags[4 * MAX_NUM_PART_IDXS_IN_CTU_WIDTH + 1];
+  bool neighborFlags[4 * MAX_NUM_PART_IDXS_IN_CTU_WIDTH + 1]; // = 129
   int  numIntraNeighbor = 0;
 
   std::fill_n(neighborFlags, totalUnits, false);
 
+  // This points to the top-left unit (left references go from 0 to totalLeftUnits-1. totalLeftUnits is the top-left unit)
   neighborFlags[totalLeftUnits] = isAboveLeftAvailable( cu, chType, posLT );
   numIntraNeighbor += neighborFlags[totalLeftUnits] ? 1 : 0;
+  // Each of these subsequent calls will verify if the references are available and update the array neighborFlags
+  // isAboveAvailable() tests all units above the CU, isAboveRightAvailable() tests all units above-right and so on
+  // At the end, numIntraNeighbor is the number of available reference units
+  //                                                                                                           // 1st unit directly above     
   numIntraNeighbor += isAboveAvailable     ( cu, chType, posLT, numAboveUnits,      unitWidth,  (neighborFlags + totalLeftUnits + 1) );
+  //                                                                                                           // 1st unit above-right
   numIntraNeighbor += isAboveRightAvailable( cu, chType, posRT, numAboveRightUnits, unitWidth,  (neighborFlags + totalLeftUnits + 1 + numAboveUnits) );
+  //                                                                                                           // last unit directly left (uppermost before top-left)
   numIntraNeighbor += isLeftAvailable      ( cu, chType, posLT, numLeftUnits,       unitHeight, (neighborFlags + totalLeftUnits - 1) );
+  //                                                                                                           // last unit bottom-left (uppermost that is not directly besides current CU)
   numIntraNeighbor += isBelowLeftAvailable ( cu, chType, posLB, numLeftBelowUnits,  unitHeight, (neighborFlags + totalLeftUnits - 1 - numLeftUnits) );
 
   // ----- Step 2: fill reference samples (depending on neighborhood) -----
@@ -979,6 +1028,7 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
   const Pel*  ptrSrc;
   const Pel   valueDC   = 1 << (sps.getBitDepth( chType ) - 1);
 
+  // There is not any reference available...
   if( numIntraNeighbor == 0 )
   {
     // Fill border with DC value
@@ -991,14 +1041,18 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
       ptrDst[i + predStride] = valueDC;
     }
   }
+  // All reference units are available, straightforward
   else if( numIntraNeighbor == totalUnits )
   {
     // Fill top-left border and top and top right with rec. samples
+    // top-left corner of references
     ptrSrc = srcBuf - (1 + multiRefIdx) * srcStride - (1 + multiRefIdx);
+    // Fill from top-left to the end of above-right
     for (int j = 0; j <= predSize + multiRefIdx; j++)
     {
       ptrDst[j] = ptrSrc[j];
     }
+    // Fill from top-left to the end of below-left
     for (int i = 0; i <= predHSize + multiRefIdx; i++)
     {
       ptrDst[i + predStride] = ptrSrc[i * srcStride];
@@ -1229,10 +1283,13 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType &chType, const Posi
   const CodingStructure& cs = *cu.cs;
 
   int       numIntra   = 0;
+  //                    numAboveUnits * unitWidth
   const int maxDx      = numUnitsInPu * unitWidth;
 
+  // Check if one unit is available and proceeds to the next, until all units above are updated
   for (int dx = 0; dx < maxDx; dx += unitWidth)
   {
+    // 1 row above the top of current CU
     const Position refPos = posLT.offset(dx, -1);
 
     if (!cs.isDecomp(refPos, chType))
@@ -1247,6 +1304,7 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType &chType, const Posi
     validFlags++;
   }
 
+  // Return the number of units available
   return numIntra;
 }
 
@@ -1840,6 +1898,13 @@ void IntraPrediction::initIntraMip( const PredictionUnit &pu, const CompArea &ar
 
 void IntraPrediction::predIntraMip( const ComponentID compId, PelBuf &piPred, const PredictionUnit &pu )
 {
+  if(TRACE_estIntraPredLumaQT 
+    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
+    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
+  ){
+    printf(".... Doing MIP prediction. Mode %d %s\n", pu.intraDir[CHANNEL_TYPE_LUMA], pu.mipTransposedFlag ? "TRANSP" : "NOT TRAN");
+  }
+  
   CHECK( piPred.width > MIP_MAX_WIDTH || piPred.height > MIP_MAX_HEIGHT, "Error: block size not supported for MIP" );
   CHECK( piPred.width != (1 << floorLog2(piPred.width)) || piPred.height != (1 << floorLog2(piPred.height)), "Error: expecting blocks of size 2^M x 2^N" );
 
@@ -1866,8 +1931,10 @@ void IntraPrediction::predIntraMip( const ComponentID compId, PelBuf &piPred, co
   CHECK(modeIdx >= getNumModesMip(piPred), "Error: Wrong MIP mode index");
 
   static_vector<int, MIP_MAX_WIDTH* MIP_MAX_HEIGHT> predMip( piPred.width * piPred.height );
-  m_matrixIntraPred.predBlock(predMip.data(), modeIdx, transposeFlag, bitDepth, compId);
 
+  // At this point the block is predicted         
+  m_matrixIntraPred.predBlock(predMip.data(), modeIdx, transposeFlag, bitDepth, compId);
+  
   for( int y = 0; y < piPred.height; y++ )
   {
     for( int x = 0; x < piPred.width; x++ )

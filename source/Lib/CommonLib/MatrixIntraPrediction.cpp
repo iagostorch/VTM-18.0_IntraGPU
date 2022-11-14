@@ -40,6 +40,7 @@
 
 #include "UnitTools.h"
 #include "MipData.h"
+#include "storchmain.h"
 
 
 MatrixIntraPrediction::MatrixIntraPrediction():
@@ -80,6 +81,20 @@ void MatrixIntraPrediction::prepareInputForPred(const CPelBuf &pSrc, const Area 
     m_refSamplesLeft[y] = pSrc.at(y + 1, 1);
   }
 
+  if(storch::targetBlock){
+    printf("Complete TOP BOUNDARY\n");
+    for(int i=0; i<64; i++){
+      printf("%d,", m_refSamplesTop[i]);
+    }
+    printf("\n");
+    
+    printf("Complete LEFT BOUNDARY\n");
+    for(int i=0; i<64; i++){
+      printf("%d,", m_refSamplesLeft[i]);
+    }
+    printf("\n");
+  }
+  
   // Step 3: Compute the reduced boundary via Haar-downsampling (input for the prediction)
   const int inputSize = 2 * m_reducedBdrySize;
   m_reducedBoundary          .resize( inputSize );
@@ -122,17 +137,47 @@ void MatrixIntraPrediction::predBlock(int *const result, const int modeIdx, cons
 {
   CHECK(m_component != compId, "Boundary has not been prepared for this component.");
 
+  // For LUMA, blocks of sizeId=2 need upsampling
   const bool needUpsampling = ( m_upsmpFactorHor > 1 ) || ( m_upsmpFactorVer > 1 );
-
+  
   const uint8_t* matrix = getMatrixData(modeIdx);
-
+  
   static_vector<int, MIP_MAX_REDUCED_OUTPUT_SAMPLES> bufReducedPred( m_reducedPredSize * m_reducedPredSize );
   int* const       reducedPred     = needUpsampling ? bufReducedPred.data() : result;
   const int* const reducedBoundary = transpose ? m_reducedBoundaryTransposed.data() : m_reducedBoundary.data();
   computeReducedPred(reducedPred, reducedBoundary, matrix, transpose, bitDepth);
+  
+  if(storch::targetBlock){
+    printf(" ## INSIDE PREDICTION OF REDUCED BLOCK...............\n");
+    printf("    ## Reduced boundary:\n");
+    for(int i=0; i<8; i++)
+      printf("%d,", transpose ? m_reducedBoundaryTransposed.at(i) : m_reducedBoundary.at(i));
+      //      printf("%d,", reducedBoundary[i]);
+    printf("\n");
+    
+    printf("    ## Prediction signal:\n");
+    for(int i=0; i<8; i++){
+      for(int j=0; j<8; j++){
+        printf("%d,", reducedPred[i*8+j]);
+      }
+      printf("\n");
+    }
+    
+  }
+  
   if( needUpsampling )
   {
     predictionUpsampling( result, reducedPred );
+    if(storch::targetBlock){
+      printf("    ## Prediction signal after upsampling:\n");
+      for(int i=0; i<TRACE_predefinedWidth; i++){
+        for(int j=0; j<TRACE_predefinedHeight; j++){
+          printf("%d,", result[i*TRACE_predefinedWidth + j]);
+        }
+        printf("\n");
+      } 
+      printf("\n");
+    }
   }
 }
 
@@ -141,9 +186,13 @@ void MatrixIntraPrediction::initPredBlockParams(const Size& block)
 {
   m_blockSize = block;
   // init size index
+  // 4x4 - size 0
+  // 8x8, Nx4 or 4xN - size 1
+  // others - size 2  
   m_sizeId = getMipSizeId( m_blockSize );
 
   // init reduced boundary size
+  // Blocks 4x4 (sizeId=0) have reduced boundaries with 2 samples
   m_reducedBdrySize = (m_sizeId == 0) ? 2 : 4;
 
   // init reduced prediction size
@@ -205,12 +254,12 @@ void MatrixIntraPrediction::predictionUpsampling1D(int* const dst, const int* co
   SizeType idxOrthDim = 0;
   const int* srcLine = src;
   int* dstLine = dst;
-  const int* bndryLine = bndry + bndryStep - 1;
-  while( idxOrthDim < srcSizeOrthDim )
+  const int* bndryLine = bndry + bndryStep - 1; // this points to refL[7] or refT[7] for sizeId=2
+  while( idxOrthDim < srcSizeOrthDim ) // Ortoghonality:
   {
     SizeType idxUpsmpDim = 0;
-    const int* before = bndryLine;
-    const int* behind = srcLine;
+    const int* before = bndryLine; // before is the sample already available and that comes BEFORE the current sample
+    const int* behind = srcLine;   // behind is the sample already available and that comes AFTER the current sample
     int* currDst = dstLine;
     while( idxUpsmpDim < srcSizeUpsmpDim )
     {
@@ -219,6 +268,8 @@ void MatrixIntraPrediction::predictionUpsampling1D(int* const dst, const int* co
       int scaledBehind = 0;
       while( pos <= upsmpFactor )
       {
+        // Conforme nos deslocamos pra direita, a amostra ANTES (before) passa a ter um peso menor e a amostra DEPOIS (behind) passa a ter um peso maior;
+        // Interpolation: As we move from "before" towards "behind", the weight if before is reduced while behind is increased
         scaledBefore -= *before;
         scaledBehind += *behind;
         *currDst = (scaledBefore + scaledBehind + roundingOffset) >> log2UpsmpFactor;
@@ -250,19 +301,42 @@ void MatrixIntraPrediction::predictionUpsampling( int* const dst, const int* con
     int* const horDst = dst + (m_upsmpFactorVer - 1) * m_blockSize.width;
     verSrc = horDst;
     verSrcStep *= m_upsmpFactorVer;
-
+    //                                   \/ this is the actual references in neighbor block
     predictionUpsampling1D( horDst, src, m_refSamplesLeft.data(),
                             m_reducedPredSize, m_reducedPredSize,
                             1, m_reducedPredSize, 1, verSrcStep,
                             m_upsmpFactorVer, m_upsmpFactorHor );
+  
+    if(storch::targetBlock){
+      printf("    ## Prediction signal upsampled horizontal:\n");
+      for(int i=0; i<TRACE_predefinedWidth; i+=m_upsmpFactorHor){
+        for(int j=0; j<TRACE_predefinedHeight; j++){
+          printf("%d,", horDst[i*TRACE_predefinedWidth+j]);
+        }
+        printf("\n");
+      }
+      printf("\n");
+    }
   }
 
+
+  
   if( m_upsmpFactorVer > 1 )
   {
     predictionUpsampling1D( dst, verSrc, m_refSamplesTop.data(),
                             m_reducedPredSize, m_blockSize.width,
                             verSrcStep, 1, m_blockSize.width, 1,
                             1, m_upsmpFactorVer );
+    if(storch::targetBlock){
+      printf("    ## Prediction signal upsampled horizontal+vertical:\n");
+      for(int i=0; i<TRACE_predefinedWidth; i++){
+        for(int j=0; j<TRACE_predefinedHeight; j++){
+          printf("%d,", dst[i*TRACE_predefinedWidth+j]);
+        }
+        printf("\n");
+      }
+      printf("\n");
+    }
   }
 }
 
@@ -300,11 +374,15 @@ void MatrixIntraPrediction::computeReducedPred( int*const result, const int* con
 
   const bool redSize = (m_sizeId == 2);
   int posRes = 0;
+  // Each position in the predicted block (resPtr) is computed based on ALL SAMPLES FROM THE BOUNDARY and ALL COEFFICIENTS IN ONE LINE OF THE PREDICTION MATRIX
+  // pred[y*8+x] = input[0]*coeff[y*8+x][0] + input[1]*coeff[y*8+x][1] + ... + input[x-1]*coeff[y*8+x][x-1]
   for( int y = 0; y < m_reducedPredSize; y++ )
   {
     for( int x = 0; x < m_reducedPredSize; x++ )
     {
-      if( redSize ) weight -= 1;
+      // The coefficient matrices for sizeId=2 have only 7 coefficients per line (the first coefficient is always zero and it is not represented)
+      if( redSize ) weight -= 1; // This is used to adjust the optimization of using only 7 positions to store 8 coefficients
+      
       int tmp0 = redSize ? 0 : (input[0] * weight[0]);
       int tmp1 = input[1] * weight[1];
       int tmp2 = input[2] * weight[2];
@@ -316,8 +394,10 @@ void MatrixIntraPrediction::computeReducedPred( int*const result, const int* con
         tmp2 += input[i + 2] * weight[i + 2];
         tmp3 += input[i + 3] * weight[i + 3];
       }
+  //  resPtr[X+Y*m_reducedPredSize]
       resPtr[posRes++] = ClipBD<int>(((tmp0 + tmp1 + tmp2 + tmp3 + offset) >> MIP_SHIFT_MATRIX) + inputOffset, bitDepth);
-
+      
+      // Update coefficients for the next line in the matrix
       weight += inputSize;
     }
   }

@@ -390,7 +390,7 @@ template<int width, X86_VEXT vext> Distortion RdCost::xGetSAD_NxN_SIMD(const Dis
   int          subStep    = (1 << subShift);
   const int    strideSrc1 = rcDtParam.org.stride * subStep;
   const int    strideSrc2 = rcDtParam.cur.stride * subStep;
-
+  
   uint32_t sum = 0;
 
   if (width == 4)
@@ -4630,6 +4630,7 @@ void RdCost::_initRdCostX86()
 
   m_afpDistortFunc[DF_SAD_WITH_MASK] = xGetSADwMask_SIMD<vext>;
 #endif
+  // When SIMD is enabled we use the distortion functions defined here
 }
 
 template void RdCost::_initRdCostX86<SIMDX86>();
