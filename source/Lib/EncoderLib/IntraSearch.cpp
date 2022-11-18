@@ -780,6 +780,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
     }
     else
     {
+      // Probe start of RMD
+      storch::startIntraRmdGeneral();
       if (mtsUsageFlag != 2)
       {
         // this should always be true
@@ -823,6 +825,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
           if (testMip && supportedMipBlkSize)
           {
+            // numModesForFullRD now equals 2 or 3. If MIP is avaliable we will double the number of modes for FullRD. When fastMip is enabled, the increase in modes for fullRD may be smaller
             numModesForFullRD += fastMip
                                    ? std::max(numModesForFullRD, floorLog2(std::min(pu.lwidth(), pu.lheight())) - 1)
                                    : numModesForFullRD;
@@ -833,12 +836,28 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
           cu.mipFlag = false;
 
           //===== init pattern for luma prediction =====
-          initIntraPatternChType(cu, pu.Y(), true);
+         
+          // Fetch the reference samples that will be used for reduced angular intra pred (modes from HEVC)
+          if(TEMPORAL_INTRA){
+            initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
+          }
+          else if(ORIG_SAMPLES_INTRA){
+            initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
+          }
+          else{
+            initIntraPatternChType(cu, pu.Y(), CURR_REC, true);
+          }
+          
+          
           bool satdChecked[NUM_INTRA_MODE];
           std::fill_n(satdChecked, NUM_INTRA_MODE, false);
 
           if (!lfnstLoadFlag)
           {
+            // RMD_1 -> Tests DC, Planar, and angular modes from HEVC
+            // Probe RMD_1
+            storch::startIntraRmdPart1();
+            
             for (int modeIdx = 0; modeIdx < numModesAvailable; modeIdx++)
             {
               uint32_t   mode      = modeIdx;
@@ -909,7 +928,10 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               m_savedHadListLFNST       = candHadList;
               lfnstSaveFlag             = false;
             }
+            // Probe RMD_1 end
+            storch::finishIntraRmdPart1();
           }   // NSSTFlag
+          
           if (!sps.getUseMIP() && lfnstLoadFlag)
           {
             // restore saved modes
@@ -923,8 +945,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
           if (!(sps.getUseMIP() && lfnstLoadFlag))
           {
+            // Probe RMD_2 begin
+            storch::startIntraRmdPart2();
+            
             static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM> parentCandList = rdModeList;
-
+              
+            // RMD_2 -> Test the new angular modes of VVC. Only the neighbors of the best HEVC modes
             // Second round of SATD for extended Angular modes
 #if GDR_ENABLED
             int nn = numModesForFullRD;
@@ -999,14 +1025,20 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 }
               }
             }
+            // Probe RMD_2 end
+            storch::finishIntraRmdPart2();
             if (saveDataForISP)
             {
               // we save the regular intra modes list
               m_ispCandListHor = rdModeList;
             }
+            // Probe MRL Begin
+            storch::startIntraRmdMrl();
+            // Starts with MRD_Idx=1
             pu.multiRefIdx    = 1;
             const int numMPMs = NUM_MOST_PROBABLE_MODES;
             unsigned  multiRefMPM[numMPMs];
+            // Fetch the MPMs o be tested with MRL
             PU::getIntraMPMs(pu, multiRefMPM);
             for (int mRefNum = 1; mRefNum < numOfPassesExtendRef; mRefNum++)
             {
@@ -1014,7 +1046,17 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
               pu.multiRefIdx = multiRefIdx;
               {
-                initIntraPatternChType(cu, pu.Y(), true);
+                // Fetch reference samples again. Now they are used for MRL
+                if(TEMPORAL_INTRA){
+                  initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
+                }
+                else if(ORIG_SAMPLES_INTRA){
+                  initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
+                }
+                else{
+                  initIntraPatternChType(cu, pu.Y(), CURR_REC, true);
+                }
+                
               }
               for (int x = 1; x < numMPMs; x++)
               {
@@ -1067,6 +1109,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 }
               }
             }
+            // Probe MRL end
+            storch::finishIntraRmdMrl();
 #if GDR_ENABLED
             if (!isEncodeGdrClean)
             {
@@ -1093,6 +1137,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               m_savedHadListLFNST.resize(3);
               lfnstSaveFlag = false;
             }
+            // Probe MIP start
+            storch::startIntraRmdMip();
+            
             //*** Derive MIP candidates using Hadamard
             if (testMip && !supportedMipBlkSize)
             {
@@ -1134,16 +1181,26 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               // Target at one specific CU to extract the predicted samples during MIP
               int target = 1;
               
-             // Trace this CU size?
-             target &= ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) );
-             // Trace this CU position?
-             target &= ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()));
-             // Toggle the custom variable to trace other encoding stages accordingly
-             storch::targetBlock = target; 
+              // Trace this CU size?
+              target &= ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) );
+              // Trace this CU position?
+              target &= ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()));
+              // Toggle the custom variable to trace other encoding stages accordingly
+              storch::targetBlock = target; 
+
               
-              
-             // At this point the reference samples are derived
-              initIntraPatternChType(cu, pu.Y());
+              // At this point the reference samples are derived
+               // Fetch the reference samples that will be used in MIP
+              if(TEMPORAL_INTRA){
+                initIntraPatternChType(cu, pu.Y(), PREV_REC);
+              } 
+              else if(ORIG_SAMPLES_INTRA){
+                initIntraPatternChType(cu, pu.Y(), CURR_ORIG);
+              }
+              else{
+                initIntraPatternChType(cu, pu.Y(), CURR_REC);
+              }
+
               initIntraMip(pu, pu.Y());
 
               const int transpOff    = getNumModesMip(pu.Y());
@@ -1226,6 +1283,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 storch::targetBlock = 0;
               }
             }
+            // Probe MIP end
+            storch::finishIntraRmdMip();            
+            
             if (sps.getUseMIP() && lfnstSaveFlag)
             {
               // save found best modes
@@ -1258,6 +1318,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
             const int numCand = PU::getIntraMPMs(pu, preds);
 
+            // Add MPM modes to the list, alongside MIPs and conventional modes
             for (int j = 0; j < numCand; j++)
             {
               bool     mostProbableModeIncluded = false;
@@ -1387,6 +1448,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         int      bestMipIdx = -1;
         for (int idx = 0; idx < rdModeList.size(); idx++)
         {
+          // Only set a random MIP modes as best to initialize the variable
           if (rdModeList[idx].mipFlg)
           {
             bestMipMode = rdModeList[idx];
@@ -1432,8 +1494,14 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
           return false;
         }
       }
+      // Probe RMD general end
+      storch::finishIntraRmdGeneral();
     }
 
+    // At this point we have the list of RDO candidates to be tested
+    // Probe RDO begin
+    storch::startIntraRdoGen();
+    
     int numNonISPModes = (int) rdModeList.size();
 
     if ( testISP )
@@ -1444,6 +1512,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       {
         const int maxNumRDModesISP = sps.getUseLFNST() ? 16 * NUM_LFNST_NUM_PER_SET : 16;
         m_curIspLfnstIdx = 0;
+        // Initialize list of ISP modes with a predefined value
         for (int i = 0; i < maxNumRDModesISP; i++)
         {
           rdModeList.push_back(ModeInfo(false, false, 0, INTRA_SUBPARTITIONS_RESERVED, 0));
@@ -1491,6 +1560,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       printf(".. >> Going into RDO with %d MODES\n", (int) rdModeList.size());
     }
     
+    // ISP modes are only tested in RDO
+    // The previous if(testISP) add some "dummy" ISP modes in the RDO list just to guarantee the correct list size
+    // Now we test the modes with RDO
     for (int mode = isSecondColorSpace ? 0 : -2 * int(testBDPCM); mode < (int) rdModeList.size(); mode++)
     {
       // set CU/PU to luma prediction mode
@@ -1510,8 +1582,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         cu.bdpcmMode = 0;
         orgMode      = rdModeList[mode];
       }
+      // Only applied to ISP
       if (!cu.bdpcmMode && rdModeList[mode].ispMod == INTRA_SUBPARTITIONS_RESERVED)
       {
+        // Probe ISP  initialization begin
+        storch::startIntraRdoIsp();
+        
         if (mode == numNonISPModes)   // the list needs to be sorted only once
         {
           if (m_pcEncCfg->getUseFastISP())
@@ -1530,6 +1606,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         }
         cu.lfnstIdx = m_curIspLfnstIdx;
         orgMode     = rdModeList[mode];
+        // Probe ISP initialization end
+        storch::finishIntraRdoIsp();
       }
       cu.mipFlag                     = orgMode.mipFlg;
       pu.mipTransposedFlag           = orgMode.mipTrFlg;
@@ -1552,8 +1630,11 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       cs.initSubStructure( *csTemp, partitioner.chType, cs.area, true );
 
       bool tmpValidReturn = false;
+      // Here the ISP intra prediction is conducted
       if( cu.ispMode )
       {
+        // Probe ISP begin
+        storch::startIntraRdoIsp();
         if ( m_pcEncCfg->getUseFastISP() )
         {
           m_modeCtrl->setISPWasTested(true);
@@ -1570,6 +1651,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
           (ISPType) cu.ispMode, (int) orgMode.modeId, (int) csTemp->tus.size(),
           csTemp->cus[0]->firstTU->cbf[COMPONENT_Y] ? csTemp->cost : MAX_DOUBLE, csBest->cost);
         csTemp->cost = !tmpValidReturn ? MAX_DOUBLE : csTemp->cost;
+        // Probe ISP finish
+        storch::finishIntraRdoIsp();
       }
       else
       {
@@ -1579,6 +1662,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         }
         else
         {
+          // Conducts the complete prediction (transf, quant, entropy) of the CU with the current intra mode
           tmpValidReturn = xRecurIntraCodingLumaQT(*csTemp, partitioner, mtsCheckRangeFlag, mtsFirstCheckId, mtsLastCheckId, moreProbMTSIdxFirst);
         }
       }
@@ -1680,6 +1764,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         }
       }
     } // Mode loop
+    // Probe RDO end
+    storch::finishIntraRdoGen();
     cu.ispMode  = bestPuMode.ispMod;
     cu.lfnstIdx = bestLfnstIdx;
 
@@ -1826,8 +1912,9 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       DistParam distParamSatd;
       pu.intraDir[1] = MDLM_L_IDX; // temporary assigned, just to indicate this is a MDLM mode. for luma down-sampling operation.
 
-      initIntraPatternChType(cu, pu.Cb());
-      initIntraPatternChType(cu, pu.Cr());
+      // This is the initialization for chroma. We can skip it for a while
+      initIntraPatternChType(cu, pu.Cb(), CURR_REC);
+      initIntraPatternChType(cu, pu.Cr(), CURR_REC);
       xGetLumaRecPixels(pu, pu.Cb());
 
       for (int idx = minMode; idx <= maxMode - 1; idx++)
@@ -3515,6 +3602,7 @@ uint64_t IntraSearch::xGetIntraFracBitsQTChroma(TransformUnit& currTU, const Com
   return fracBits;
 }
 
+// This function is used for RDO, when we test the modes already filtered
 void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID &compID, Distortion &dist,
                                       const int &default0Save1Load2, uint32_t *numSig, TrModeList *trModes,
                                       const bool loadTr)
@@ -3570,7 +3658,8 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID &comp
       }
       else
       {
-        initIntraPatternChType(*tu.cu, area);
+       // Initialization for RDO. Since we are not implementign transform/quantization/entropy yet it makes no sense to change the reference samples during RDO
+        initIntraPatternChType(*tu.cu, area, CURR_REC);
       }
 
       //===== get prediction signal =====
@@ -4635,7 +4724,9 @@ bool IntraSearch::xRecurIntraCodingACTQT(CodingStructure &cs, Partitioner &parti
       PelBuf         piPred = predBuf.bufs[compID];
       PelBuf         piResi = resiBuf.bufs[compID];
 
-      initIntraPatternChType(*tu.cu, area);
+      // This function is only invoked when RDO uses color transform for 444 videso
+      // Don't change it
+      initIntraPatternChType(*tu.cu, area, CURR_REC);
       if (PU::isMIP(pu, chType))
       {
         initIntraMip(pu, area);
@@ -5442,8 +5533,9 @@ ChromaCbfs IntraSearch::xRecurIntraChromaCodingQT( CodingStructure &cs, Partitio
     PelBuf piPredCb = cs.getPredBuf(cbArea);
     PelBuf piPredCr = cs.getPredBuf(crArea);
 
-    initIntraPatternChType( *currTU.cu, cbArea);
-    initIntraPatternChType( *currTU.cu, crArea);
+    // This only deals with chroma. Don't change the reference samples here
+    initIntraPatternChType(*currTU.cu, cbArea, CURR_REC);
+    initIntraPatternChType(*currTU.cu, crArea, CURR_REC);
 
     if( PU::isLMCMode( predMode ) )
     {

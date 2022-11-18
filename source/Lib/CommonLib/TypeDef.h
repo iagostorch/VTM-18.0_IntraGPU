@@ -1117,6 +1117,14 @@ enum RESHAPE_SIGNAL_TYPE
   RESHAPE_SIGNAL_NULL = 100,
 };
 
+// Type of frame used as reference for intra prediction
+enum FrameIntra
+{
+    PREV_REC    = 0,
+    CURR_ORIG   = 1,
+    CURR_REC    = 2
+};
+
 
 // ---------------------------------------------------------------------------
 // exception class

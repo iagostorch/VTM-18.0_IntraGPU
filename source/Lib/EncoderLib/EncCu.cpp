@@ -840,8 +840,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
     else if( currTestMode.type == ETM_INTRA )
     {
+      // Here it conducts intra prediction
       if (slice.getSPS()->getUseColorTrans() && !CS::isDualITree(*tempCS))
       {
+        // Never get into this IF
         bool skipSecColorSpace = false;
         skipSecColorSpace = xCheckRDCostIntra(tempCS, bestCS, partitioner, currTestMode, (m_pcEncCfg->getRGBFormatFlag() ? true : false));
         if ((m_pcEncCfg->getCostMode() == COST_LOSSLESS_CODING && slice.isLossless()) && !m_pcEncCfg->getRGBFormatFlag())
@@ -871,18 +873,19 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
       else
       {
+        // Always enters this else
         xCheckRDCostIntra(tempCS, bestCS, partitioner, currTestMode, false);
       }
       splitRdCostBest[CTU_LEVEL] = bestCS->cost;
       tempCS->splitRdCostBest = splitRdCostBest;
     }
-    else if (currTestMode.type == ETM_PALETTE)
+    else if (currTestMode.type == ETM_PALETTE)  // Pallete mode of screen content
     {
       xCheckPLT( tempCS, bestCS, partitioner, currTestMode );
       splitRdCostBest[CTU_LEVEL] = bestCS->cost;
       tempCS->splitRdCostBest = splitRdCostBest;
     }
-    else if (currTestMode.type == ETM_IBC)
+    else if (currTestMode.type == ETM_IBC)  // intra block copy of screen content
     {
       xCheckRDCostIBCMode(tempCS, bestCS, partitioner, currTestMode);
       splitRdCostBest[CTU_LEVEL] = bestCS->cost;
@@ -1596,6 +1599,7 @@ bool EncCu::xCheckRDCostIntra(CodingStructure *&tempCS, CodingStructure *&bestCS
     CHECK(adaptiveColorTrans && (CS::isDualITree(*tempCS) || partitioner.chType != CHANNEL_TYPE_LUMA), "adaptive color transform cannot be applied to dual-tree");
   }
 
+  // grpNumMax=4, max candidates for MTS (multi transform selection)
   for( int trGrpIdx = 0; trGrpIdx < grpNumMax; trGrpIdx++ )
   {
     const uint8_t startMtsFlag = trGrpIdx > 0;
@@ -1603,6 +1607,7 @@ bool EncCu::xCheckRDCostIntra(CodingStructure *&tempCS, CodingStructure *&bestCS
 
     if( ( trGrpIdx == 0 || ( !skipSecondMtsPass && considerMtsSecondPass ) ) && trGrpCheck[ trGrpIdx ] )
     {
+       // lfnst -> low frequency non separable transform
       for( int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++ )
       {
         for( uint8_t mtsFlag = startMtsFlag; mtsFlag <= endMtsFlag; mtsFlag++ )
@@ -1645,6 +1650,7 @@ bool EncCu::xCheckRDCostIntra(CodingStructure *&tempCS, CodingStructure *&bestCS
           m_bestModeUpdated = tempCS->useDbCost = bestCS->useDbCost = false;
           
           bool validCandRet = false;
+          // Here it conducts the actual prediction for LUMA blocks
           if( isLuma( partitioner.chType ) )
           {
             //ISP uses the value of the best cost so far (luma if it is the fast version) to avoid test non-necessary subpartitions
@@ -1852,7 +1858,10 @@ bool EncCu::xCheckRDCostIntra(CodingStructure *&tempCS, CodingStructure *&bestCS
                 }
               }
             }
-
+            
+            // Depending on the results of ISP, the non-default transforms are skipped (non DCT-II and LFNST)
+            // It compares the RDcost of ISP with DCT-II without ISP, assuming a threshold
+            // FastISP is an encoding parameter
             //we decide to skip the non-DCT-II transforms and LFNST according to the ISP results
             if ((endMtsFlag > 0 || endLfnstIdx > 0) && (cu.ispMode || (bestCS && bestCS->cus[0]->ispMode)) && tempCS->slice->isIntra() && m_pcEncCfg->getUseFastISP())
             {
@@ -1862,11 +1871,14 @@ bool EncCu::xCheckRDCostIntra(CodingStructure *&tempCS, CodingStructure *&bestCS
               double threshold = 1.4;
 
               double lfnstThreshold = 1.01 * threshold;
+              // If the best cost without ISP is worse than the ISP mode (assuming a LFNST threshold), skip other lfnst
               if( m_modeCtrl->getStopNonDCT2Transforms() || bestCostDct2NoIsp > bestIspCost*lfnstThreshold )
               {
                 endLfnstIdx = lfnstIdx;
               }
 
+              // If the best cost without ISP is worse than the ISP mode (assuming a different threshold), skip second pass
+              // (what is the second pass? I think it all transforms except for DCT-II)
               if ( m_modeCtrl->getStopNonDCT2Transforms() || bestCostDct2NoIsp > bestIspCost*threshold )
               {
                 skipSecondMtsPass = true;
@@ -2484,7 +2496,7 @@ void EncCu::xCheckRDCostMerge2Nx2N( CodingStructure *&tempCS, CodingStructure *&
           // generate intrainter Y prediction
           if (mergeCnt == 0)
           {
-            m_pcIntraSearch->initIntraPatternChType(*pu.cu, pu.Y());
+            m_pcIntraSearch->initIntraPatternChType(*pu.cu, pu.Y(), CURR_REC);
             m_pcIntraSearch->predIntraAng(COMPONENT_Y, pu.cs->getPredBuf(pu).Y(), pu);
             m_pcIntraSearch->switchBuffer(pu, COMPONENT_Y, pu.cs->getPredBuf(pu).Y(), m_pcIntraSearch->getPredictorPtr2(COMPONENT_Y, intraCnt));
           }
@@ -2661,11 +2673,11 @@ void EncCu::xCheckRDCostMerge2Nx2N( CodingStructure *&tempCS, CodingStructure *&
               continue;
             }
             uint32_t bufIdx = 0;
-            m_pcIntraSearch->initIntraPatternChType(*pu.cu, pu.Cb());
+            m_pcIntraSearch->initIntraPatternChType(*pu.cu, pu.Cb(), CURR_REC);
             m_pcIntraSearch->predIntraAng(COMPONENT_Cb, pu.cs->getPredBuf(pu).Cb(), pu);
             m_pcIntraSearch->switchBuffer(pu, COMPONENT_Cb, pu.cs->getPredBuf(pu).Cb(), m_pcIntraSearch->getPredictorPtr2(COMPONENT_Cb, bufIdx));
 
-            m_pcIntraSearch->initIntraPatternChType(*pu.cu, pu.Cr());
+            m_pcIntraSearch->initIntraPatternChType(*pu.cu, pu.Cr(), CURR_REC);
             m_pcIntraSearch->predIntraAng(COMPONENT_Cr, pu.cs->getPredBuf(pu).Cr(), pu);
             m_pcIntraSearch->switchBuffer(pu, COMPONENT_Cr, pu.cs->getPredBuf(pu).Cr(), m_pcIntraSearch->getPredictorPtr2(COMPONENT_Cr, bufIdx));
           }

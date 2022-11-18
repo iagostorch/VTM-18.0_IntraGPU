@@ -12,11 +12,20 @@
  */
 
 #include "storchmain.h"
+#include "Picture.h"
 
 int storch::var, storch::numExtractedBlocks;
 int storch::extractedFrames[EXT_NUM][500];
 int storch::targetBlock;
 int storch::target_availability;
+
+struct timeval storch::rmdGen1, storch::rmdGen2, storch::rmdHevc1, storch::rmdHevc2, storch::rmdVvc1, storch::rmdVvc2, storch::rmdMrl1, storch::rmdMrl2, storch::rmdMip1, storch::rmdMip2, storch::rdoGen1, storch::rdoGen2, storch::rdoIsp1, storch::rdoIsp2; 
+double storch::intraRmdGenTime, storch::intraRmd1Time, storch::intraRmd2Time, storch::intraRmdMrlTime, storch::intraRmdMipTime, storch::intraRdoGenTime, storch::intraRdoIspTime;
+
+PelBuf storch::reconstructedPrev;
+Picture storch::previousPic;
+PelStorage storch::recoBuf;
+
 
 storch::storch() {
   for(int i=0; i<EXT_NUM; i++){
@@ -28,10 +37,36 @@ storch::storch() {
   numExtractedBlocks = 0;
   targetBlock=0;
   target_availability=0;
+  
+  intraRmdGenTime = 0.0;
+  intraRmd1Time = 0.0;
+  intraRmd2Time = 0.0;
+  intraRmdMrlTime = 0.0;
+  intraRmdMipTime = 0.0;
+  intraRdoGenTime = 0.0;
+  intraRdoIspTime = 0.0;
+  
+  previousPic = Picture();
+  recoBuf = PelStorage();
 }
 
 void storch::finishEncoding(){
   printf("Finished the encoding\n");
+  
+  cout << "###      Intraframe prediction time:" << endl;
+
+  cout << "General RMD:  " << (intraRmdGenTime) << endl;
+  cout << "  RMD Part 1            " << intraRmd1Time << endl;
+  cout << "  RMD Part 2            " << intraRmd2Time << endl;
+  cout << "  RMD MRL               " << intraRmdMrlTime << endl;
+  cout << "  RMD MIP               " << intraRmdMipTime << endl;
+  cout << "  RMD Others            " << intraRmdGenTime - (intraRmd1Time+intraRmd2Time+intraRmdMrlTime+intraRmdMipTime)<< endl;
+
+  cout << "General RDO:            " << intraRdoGenTime << endl;
+  cout << "  RDO ISPs              " << intraRdoIspTime << endl;
+  cout << "  RDO Normal            " << intraRdoGenTime - intraRdoIspTime << endl;
+
+  cout << "---------------------------------------------------------------------" << endl;
 }
 
 // Export the samples of a PU into a CSV file
@@ -294,3 +329,133 @@ void storch::exportIntraReferences(Pel *buffer, CodingUnit cu, SamplesType type)
   }
   fileHandler.close();
 }
+
+// Used to track the execution time
+
+void storch::startIntraRmdPart1(){
+  gettimeofday(&rmdHevc1, NULL);
+}
+
+void storch::finishIntraRmdPart1(){
+  gettimeofday(&rmdHevc2, NULL);
+  intraRmd1Time += (double) (rmdHevc2.tv_usec - rmdHevc1.tv_usec)/1000000 + (double) (rmdHevc2.tv_sec - rmdHevc1.tv_sec);
+}
+
+void storch::startIntraRmdPart2(){
+  gettimeofday(&rmdVvc1, NULL);
+}
+
+void storch::finishIntraRmdPart2(){
+  gettimeofday(&rmdVvc2, NULL);
+  intraRmd2Time += (double) (rmdVvc2.tv_usec - rmdVvc1.tv_usec)/1000000 + (double) (rmdVvc2.tv_sec - rmdVvc1.tv_sec);
+}
+
+void storch::startIntraRmdMip(){
+  gettimeofday(&rmdMip1, NULL);
+}
+
+void storch::finishIntraRmdMip(){
+  gettimeofday(&rmdMip2, NULL);
+  intraRmdMipTime += (double) (rmdMip2.tv_usec - rmdMip1.tv_usec)/1000000 + (double) (rmdMip2.tv_sec - rmdMip1.tv_sec);
+}
+
+void storch::startIntraRmdGeneral(){
+  gettimeofday(&rmdGen1, NULL);
+}
+
+void storch::finishIntraRmdGeneral(){
+  gettimeofday(&rmdGen2, NULL);
+  intraRmdGenTime += (double) (rmdGen2.tv_usec - rmdGen1.tv_usec)/1000000 + (double) (rmdGen2.tv_sec - rmdGen1.tv_sec);
+}
+
+void storch::startIntraRdoIsp(){
+  gettimeofday(&rdoIsp1, NULL);
+}
+
+void storch::finishIntraRdoIsp(){
+  gettimeofday(&rdoIsp2, NULL);
+  intraRdoIspTime += (double) (rdoIsp2.tv_usec - rdoIsp1.tv_usec)/1000000 + (double) (rdoIsp2.tv_sec - rdoIsp1.tv_sec);
+}
+
+void storch::startIntraRdoGen(){
+  gettimeofday(&rdoGen1, NULL);
+}
+
+void storch::finishIntraRdoGen(){
+  gettimeofday(&rdoGen2, NULL);
+  intraRdoGenTime += (double) (rdoGen2.tv_usec - rdoGen1.tv_usec)/1000000 + (double) (rdoGen2.tv_sec - rdoGen1.tv_sec);
+}
+
+void storch::startIntraRmdMrl(){
+  gettimeofday(&rmdMrl1, NULL);
+}
+
+void storch::finishIntraRmdMrl(){
+  gettimeofday(&rmdMrl2, NULL);
+  intraRmdMrlTime += (double) (rmdMrl2.tv_usec - rmdMrl1.tv_usec)/1000000 + (double) (rmdMrl2.tv_sec - rmdMrl1.tv_sec);
+}
+
+void storch::storeRecBuf(Picture* pic){
+//  recoBuf = pic->m_bufs[PIC_RECONSTRUCTION];
+//  recoBuf.copyFrom(pic->getRecoBuf(),true );
+//  printf("CHAMOU STORE\n");
+  recoBuf.createFromBuf(pic->getRecoBuf());
+  
+//  free(recoBuf.bufs[COMPONENT_Y].buf);
+  
+  recoBuf.bufs[COMPONENT_Y].buf = (Pel*) malloc(sizeof(Pel) * pic->getRecoBuf(COMPONENT_Y).height * pic->getRecoBuf(COMPONENT_Y).stride);
+  
+  // Cópia explicita dos pixels pra evitar ponteiros
+  // Pel* pixels = pic->getRecoBuf(COMPONENT_Y).buf;
+//  int pSize = pic->getRecoBuf(COMPONENT_Y).height * pic->getRecoBuf(COMPONENT_Y).stride;
+//  Pel* pixels = (Pel*) malloc(sizeof(Pel) * pSize);
+//  memcpy(pixels, pic->getRecoBuf(COMPONENT_Y).buf, pSize);
+//  memcpy(recoBuf.bufs[COMPONENT_Y].buf, pixels, pSize);
+  
+//  printf("Width=%d  Height=%d  Stride=%d\n", pic->getRecoBuf(COMPONENT_Y).width, pic->getRecoBuf(COMPONENT_Y).height, pic->getRecoBuf(COMPONENT_Y).stride);
+  
+//  memcpy(recoBuf.bufs[COMPONENT_Y].buf, pic->getRecoBuf(COMPONENT_Y).buf, pSize);
+  
+  int stride = pic->getRecoBuf(COMPONENT_Y).stride;
+  //*
+  for(int i=0; i<pic->getPicHeightInLumaSamples(); i++){
+    for(int j=0; j<pic->getPicWidthInLumaSamples(); j++){
+      recoBuf.bufs[COMPONENT_Y].buf[i*stride + j] = pic->getRecoBuf(COMPONENT_Y).buf[i*stride + j];
+//      recoBuf.bufs[COMPONENT_Y].buf[i*stride + j] = pixels[i*stride + j];
+//      recoBuf.bufs[COMPONENT_Y].buf[i*stride + j] = pixels[i*832 + j];
+    }
+  }  
+  //*/
+  
+  /*
+  for(int i=0; i<pic->getPicHeightInLumaSamples(); i++){
+    for(int j=0; j<pic->getPicWidthInLumaSamples(); j++){
+      printf("%d,", recoBuf.bufs[COMPONENT_Y].buf[i*stride + j]);
+      
+//      printf("%d,", recoBuf.bufs[COMPONENT_Y].buf[i*832 + j]);
+    }
+    printf("\n");
+  }
+  printf("############################################\n");
+  //*/
+  
+}
+
+PelStorage storch::loadRecBuf(){
+  return recoBuf;
+}
+
+void storch::printRecBuf(){
+  printf("CHAMOU PRINT REC_BUFFER\n");
+    Pel* pixels = recoBuf.get(COMPONENT_Y).buf;
+    int strid = recoBuf.get(COMPONENT_Y).stride;
+    printf("---------------------------\n");
+    for(int i=0; i<480; i++){
+      for(int j=0; j<832; j++){
+        printf("%d,", pixels[i*strid + j] );
+      }
+      printf("\n");
+    }
+    printf("---------------------------\n");  
+}
+

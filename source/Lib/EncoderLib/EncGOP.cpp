@@ -3383,6 +3383,10 @@ void EncGOP::compressGOP(int pocLast, int numPicRcvd, PicList &rcListPic, std::l
         m_pcSliceEncoder->precompressSlice( pcPic );
         m_pcSliceEncoder->compressSlice   ( pcPic, false, false );
 
+        
+        // This is a preliminary reconstructed frame, before the in-loop filtering. This is the reference sued for intra, but inter uses a different reference after filtering
+        storch::storeRecBuf(pcPic);
+        
         if(sliceIdx < pcPic->cs->pps->getNumSlicesInPic() - 1)
         {
           uint32_t independentSliceIdx = pcSlice->getIndependentSliceIdx();

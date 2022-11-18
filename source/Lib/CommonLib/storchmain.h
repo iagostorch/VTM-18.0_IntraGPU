@@ -21,6 +21,7 @@
 #include <string>
 
 #include "CommonLib/Unit.h"
+#include "Slice.h"
 
 // My directives
 
@@ -39,6 +40,10 @@
 #define EXTRACT_frames 1                // Extract the original, true original, predicted and reconstructed frame
 
 #define ENABLE_SPLIT_HEURISTICS 1
+
+// When both are disabled we conduct the vanilla intra prediction, with predicted samples from the same frame
+#define TEMPORAL_INTRA 0 // When enabled, the references for intra predictin are fetched from the previous reconstructed frame
+#define ORIG_SAMPLES_INTRA 1 // When enabled, the references for intra predictin are the original samples of the current frame
 
 using namespace std;
 
@@ -69,9 +74,46 @@ class storch{
         static int targetBlock;
         static int target_availability;
         
+        // Tracking intra prediction time
+        static void startIntraRmdPart1();
+        static void finishIntraRmdPart1();
+
+        static void startIntraRmdPart2();
+        static void finishIntraRmdPart2();
+
+        static void startIntraRmdMrl();
+        static void finishIntraRmdMrl();
+
+        static void startIntraRmdMip();
+        static void finishIntraRmdMip();
+
+        static void startIntraRmdGeneral();
+        static void finishIntraRmdGeneral();
+
+        static void startIntraRdoIsp();
+        static void finishIntraRdoIsp();
+
+        static void startIntraRdoGen();
+        static void finishIntraRdoGen();
+
+        static void storeRecBuf(Picture* pic);
+        static PelStorage loadRecBuf();
+        static void printRecBuf();
+
+
+        
     private:
         static int var;
         static int extractedFrames[EXT_NUM][500];
+        
+        static struct timeval rmdGen1, rmdGen2, rmdHevc1, rmdHevc2, rmdVvc1, rmdVvc2, rmdMrl1, rmdMrl2, rmdMip1, rmdMip2, rdoGen1, rdoGen2, rdoIsp1, rdoIsp2; 
+        static double intraRmdGenTime, intraRmd1Time, intraRmd2Time, intraRmdMrlTime, intraRmdMipTime, intraRdoGenTime, intraRdoIspTime;
+    
+        static PelBuf reconstructedPrev;
+        static Picture previousPic;
+        static PelStorage recoBuf;
+    
+        
 };
 
 

@@ -209,7 +209,7 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   }
   else
   {
-    m_pcIntraPred->initIntraPatternChType(*tu.cu, area);
+    m_pcIntraPred->initIntraPatternChType(*tu.cu, area, CURR_REC);
   }
 
   //===== get prediction signal =====
@@ -357,7 +357,7 @@ void DecCu::xIntraRecACTBlk(TransformUnit& tu)
     const ChannelType    chType = toChannelType(compID);
 
     PelBuf piPred = cs.getPredBuf(area);
-    m_pcIntraPred->initIntraPatternChType(*tu.cu, area);
+    m_pcIntraPred->initIntraPatternChType(*tu.cu, area, CURR_REC);
     if (PU::isMIP(pu, chType))
     {
       m_pcIntraPred->initIntraMip(pu, area);

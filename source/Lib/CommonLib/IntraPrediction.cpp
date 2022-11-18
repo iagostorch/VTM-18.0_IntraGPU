@@ -741,7 +741,7 @@ void IntraPrediction::geneIntrainterPred(const CodingUnit &cu)
 
   const PredictionUnit* pu = cu.firstPU;
 
-  initIntraPatternChType(cu, pu->Y());
+  initIntraPatternChType(cu, pu->Y(), CURR_REC);
   predIntraAng(COMPONENT_Y, cu.cs->getPredBuf(*pu).Y(), *pu);
   int maxCompID = 1;
   if (isChromaEnabled(pu->chromaFormat))
@@ -749,10 +749,10 @@ void IntraPrediction::geneIntrainterPred(const CodingUnit &cu)
     maxCompID = MAX_NUM_COMPONENT;
     if (pu->chromaSize().width > 2)
     {
-      initIntraPatternChType(cu, pu->Cb());
+      initIntraPatternChType(cu, pu->Cb(), CURR_REC);
       predIntraAng(COMPONENT_Cb, cu.cs->getPredBuf(*pu).Cb(), *pu);
 
-      initIntraPatternChType(cu, pu->Cr());
+      initIntraPatternChType(cu, pu->Cr(), CURR_REC);
       predIntraAng(COMPONENT_Cr, cu.cs->getPredBuf(*pu).Cr(), *pu);
     }
   }
@@ -778,7 +778,7 @@ inline int  isAboveRightAvailable(const CodingUnit &cu, const ChannelType &chTyp
 inline int  isBelowLeftAvailable(const CodingUnit &cu, const ChannelType &chType, const Position &posLB,
                                  const uint32_t numUnitsInPu, const uint32_t unitHeight, bool *validFlags);
 
-void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompArea &area, const bool forceRefFilterFlag)
+void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompArea &area, FrameIntra frame, const bool forceRefFilterFlag)
 {
   CHECK(area.width == 2, "Width of 2 is not supported");
   const CodingStructure& cs   = *cu.cs;
@@ -795,7 +795,25 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   setReferenceArrayLengths( area );
 
   // ----- Step 1: unfiltered reference samples -----
-  xFillReferenceSamples( cs.picture->getRecoBuf( area ), refBufUnfiltered, area, cu );
+  
+  
+  if(frame == CURR_ORIG){ // Reference samples are the original samples of current frame
+    // O problema pode estar aqui. O video reconstruído tem 10 bits e o original pode ter 8 bits
+    xFillReferenceSamples( cs.picture->getOrigBuf( area ), refBufUnfiltered, area, cu );
+  }
+  else if((cs.picture->poc==0) || (frame==CURR_REC)){ // Normal reference samples
+    xFillReferenceSamples( cs.picture->getRecoBuf( area ), refBufUnfiltered, area, cu );
+  }
+  else if(frame==PREV_REC){ // Reference samples from the previous frame
+    PelStorage x = storch::loadRecBuf(); // Fetch the samples from previous frame (store in storchmain)
+    xFillReferenceSamples( x.getBuf(area), refBufUnfiltered, area, cu );
+  }
+  else{
+    printf("ERROR -- Incorrect frame when fetching reference samples for intra predictin\n");
+    exit(0);
+  }
+  
+  
   if(TRACE_estIntraPredLumaQT && TRACE_innerResults && EXTRACT_blockData
           && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
           && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
@@ -1039,7 +1057,10 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
   numIntraNeighbor += isBelowLeftAvailable ( cu, chType, posLB, numLeftBelowUnits,  unitHeight, (neighborFlags + totalLeftUnits - 1 - numLeftUnits) );
 
   // ----- Step 2: fill reference samples (depending on neighborhood) -----
-
+  
+  // This srcBuf contains the predicted samples of current frame. We need to modify it to get the predicted samples from the previous frame
+  // Now we are passing a different recoBuf for the current and previous frame
+    
   const Pel*  srcBuf    = recoBuf.buf;
   const int   srcStride = recoBuf.stride;
         Pel*  ptrDst    = refBufUnfiltered;
