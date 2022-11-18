@@ -49,6 +49,8 @@
 
 #include "CommonLib/dtrace_buffer.h"
 
+#include "CommonLib/storchmain.h"
+
 #include <stdio.h>
 #include <cmath>
 #include <algorithm>
@@ -1193,7 +1195,8 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
     )
   {
     xCheckBestMode( tempCS, bestCS, partitioner, encTestMode );
-    return;
+    if(ENABLE_SPLIT_HEURISTICS)
+      return;
   }
 
   const bool chromaNotSplit = modeTypeParent == MODE_TYPE_ALL && modeTypeChild == MODE_TYPE_INTRA ? true : false;
@@ -1259,7 +1262,7 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
       xCompressCU(tempSubCS, bestSubCS, partitioner, newMaxCostAllowed);
       tempSubCS->bestParent = bestSubCS->bestParent = nullptr;
 
-      if( bestSubCS->cost == MAX_DOUBLE )
+      if( ENABLE_SPLIT_HEURISTICS && bestSubCS->cost == MAX_DOUBLE )
       {
         CHECK( split == CU_QUAD_SPLIT, "Split decision reusing cannot skip quad split" );
         tempCS->cost = MAX_DOUBLE;
@@ -1299,7 +1302,7 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
       tempSubCS->releaseIntermediateData();
       bestSubCS->releaseIntermediateData();
-      if( !tempCS->slice->isIntra() && partitioner.isConsIntra() )
+      if( ENABLE_SPLIT_HEURISTICS && !tempCS->slice->isIntra() && partitioner.isConsIntra() )
       {
         tempCS->cost = m_pcRdCost->calcRdCost( tempCS->fracBits, tempCS->dist );
         if( tempCS->cost > bestCS->cost )
@@ -1640,7 +1643,7 @@ bool EncCu::xCheckRDCostIntra(CodingStructure *&tempCS, CodingStructure *&bestCS
           tempCS->interHad    = interHad;
 
           m_bestModeUpdated = tempCS->useDbCost = bestCS->useDbCost = false;
-
+          
           bool validCandRet = false;
           if( isLuma( partitioner.chType ) )
           {

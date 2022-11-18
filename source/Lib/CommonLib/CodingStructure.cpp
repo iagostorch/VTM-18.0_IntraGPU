@@ -42,6 +42,7 @@
 #include "Picture.h"
 #include "UnitTools.h"
 #include "UnitPartitioner.h"
+#include "storchmain.h"
 
 
 XUCache g_globalUnitCache = XUCache();
@@ -2443,6 +2444,18 @@ const CodingUnit* CodingStructure::getCURestricted( const Position &pos, const C
   int xNbY  = pos.x << getChannelTypeScaleX( _chType, curCu.chromaFormat );
   int xCurr = curCu.blocks[_chType].x << getChannelTypeScaleX( _chType, curCu.chromaFormat );
   bool addCheck = (wavefrontsEnabled && (xNbY >> ctuSizeBit) >= (xCurr >> ctuSizeBit) + 1 ) ? false : true;
+  
+  // CU at refPosition exists, it is in the same tile/tile, it's in a different CS or in the same CS with a smaller cuIdx
+  // In the end, we must verify the index of the current and the reference CU to know if its available
+  if(storch::target_availability){
+    if(cu){
+      cout << ".... @@       " << curCu.idx << "x" << cu->idx << endl;
+    }
+    else{
+      printf(".... @@       NULL-2\n");
+    }
+  }
+  
   if( cu && CU::isSameSliceAndTile( *cu, curCu ) && ( cu->cs != curCu.cs || cu->idx <= curCu.idx ) && addCheck)
   {
     return cu;

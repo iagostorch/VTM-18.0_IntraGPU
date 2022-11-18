@@ -721,6 +721,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   ){
     printf("estIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
   
+    
+    
     PartitioningStack z = partitioner.getPartStack();
 
     // Print the sequence of splits (QT, TH, TV, BH, BV) that led to the current CU
@@ -1094,7 +1096,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             //*** Derive MIP candidates using Hadamard
             if (testMip && !supportedMipBlkSize)
             {
-              if(TRACE_estIntraPredLumaQT 
+              if(TRACE_estIntraPredLumaQT && TRACE_innerResults
                 && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
                 && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
               ){
@@ -1117,7 +1119,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             else if (testMip)
             {
               
-              if(TRACE_estIntraPredLumaQT 
+              if(TRACE_estIntraPredLumaQT && TRACE_innerResults
                 && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
                 && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
               ){
@@ -1147,7 +1149,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               const int transpOff    = getNumModesMip(pu.Y());
               const int numModesFull = (transpOff << 1);
               
-              if(EXTRACT_predictedBlock && target){
+              if(EXTRACT_blockData && target){
                 storch::exportSamplesBlock_v2(pu.cu->cs->getOrgBuf(COMPONENT_Y), EXT_ORIGINAL, pu.lx(), pu.ly());
               }
                       
@@ -1162,7 +1164,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 
 
                 
-                if(EXTRACT_predictedBlock && target){
+                if(EXTRACT_blockData && target){
                   string suffix = (string) (isTransposed ? "T1" : "T0");
                   suffix += "_mode" + std::to_string(mode);
                   
@@ -1174,7 +1176,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 Distortion minSadHad =
                   std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
 
-                if(storch::targetBlock)
+                if(storch::targetBlock && TRACE_innerResults)
                   printf("SAD distortion PRE x2 SCALE %ld\n\n", distParamSad.distFunc(distParamSad));
                 
                 m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);
@@ -1215,7 +1217,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               const double thresholdHadCost = 1.0 + 1.4 / sqrt((double) (pu.lwidth() * pu.lheight()));
               reduceHadCandList(rdModeList, candCostList, numModesForFullRD, thresholdHadCost, mipHadCost, pu, fastMip);
               
-              if(TRACE_estIntraPredLumaQT 
+              if(TRACE_estIntraPredLumaQT && TRACE_innerResults
                 && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
                 && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
               ){
@@ -1482,7 +1484,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
     }
     int bestLfnstIdx = cu.lfnstIdx;
 
-    if(TRACE_estIntraPredLumaQT 
+    if(TRACE_estIntraPredLumaQT && TRACE_innerResults
       && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
       && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
     ){
@@ -1707,7 +1709,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         CHECK(pu.intraDir[CHANNEL_TYPE_CHROMA] != DM_CHROMA_IDX, "chroma should use DM mode for adaptive color transform");
       }
     }
-    if(TRACE_estIntraPredLumaQT 
+    if(TRACE_estIntraPredLumaQT && TRACE_innerResults
       && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
       && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
     ){

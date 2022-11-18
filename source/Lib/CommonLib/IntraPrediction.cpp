@@ -796,7 +796,7 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
 
   // ----- Step 1: unfiltered reference samples -----
   xFillReferenceSamples( cs.picture->getRecoBuf( area ), refBufUnfiltered, area, cu );
-  if(TRACE_estIntraPredLumaQT 
+  if(TRACE_estIntraPredLumaQT && TRACE_innerResults && EXTRACT_blockData
           && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
           && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
     ){
@@ -806,7 +806,7 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   if( m_ipaParam.refFilterFlag || forceRefFilterFlag )
   {
     xFilterReferenceSamples( refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.firstPU->multiRefIdx );
-    if(TRACE_estIntraPredLumaQT 
+    if(TRACE_estIntraPredLumaQT && TRACE_innerResults && EXTRACT_blockData
           && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
           && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
     ){
@@ -971,26 +971,6 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
   const int  numAboveRightUnits = totalAboveUnits - numAboveUnits;
   const int  numLeftBelowUnits  = totalLeftUnits - numLeftUnits;
 
-  if(TRACE_estIntraPredLumaQT 
-    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-  ){
-    printf(".... Availability results:\n");
-    printf(".... | tuWidth ____________ %d\n", tuWidth);
-    printf(".... | tuHeight ___________ %d\n", tuHeight);
-    printf(".... | predSize ___________ %d\n", predSize);
-    printf(".... | predHSize __________ %d\n", predHSize);
-    printf(".... | predStride _________ %d\n", predStride);
-    printf(".... | unitWidth __________ %d\n", unitWidth);
-    printf(".... | unitHeight _________ %d\n", unitHeight);
-    printf(".... | totalAboveUnits ____ %d\n", totalAboveUnits);
-    printf(".... | totalLeftUnits _____ %d\n", totalLeftUnits);
-    printf(".... | totalUnits _________ %d\n", totalUnits);
-    printf(".... | numAboveUnits ______ %d\n", numAboveUnits);
-    printf(".... | numLeftUnits _______ %d\n", numLeftUnits);
-    printf(".... | numAboveRightUnits _ %d\n", numAboveRightUnits);
-    printf(".... | numLeftBelowUnits __ %d\n", numLeftBelowUnits);
-  }
   
   CHECK( numAboveUnits <= 0 || numLeftUnits <= 0 || numAboveRightUnits <= 0 || numLeftBelowUnits <= 0, "Size not supported" );
 
@@ -1005,6 +985,44 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
 
   std::fill_n(neighborFlags, totalUnits, false);
 
+  if(TRACE_estIntraPredLumaQT && TRACE_innerResults
+    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+  ){
+    storch::targetBlock = 1;
+    storch::target_availability = TRACE_fineGrainedNeighborAvailability && 1;
+    if (storch::target_availability)
+      printf("[!!!] SET AVAILABILITY\n");
+    
+    int aboveLeft = isAboveLeftAvailable( cu, chType, posLT );
+    int above = isAboveAvailable     ( cu, chType, posLT, numAboveUnits,      unitWidth,  (neighborFlags + totalLeftUnits + 1) );
+    int left = isLeftAvailable      ( cu, chType, posLT, numLeftUnits,       unitHeight, (neighborFlags + totalLeftUnits - 1) );
+    int aboveRight = isAboveRightAvailable( cu, chType, posRT, numAboveRightUnits, unitWidth,  (neighborFlags + totalLeftUnits + 1 + numAboveUnits) );
+    int belowLeft = isBelowLeftAvailable ( cu, chType, posLB, numLeftBelowUnits,  unitHeight, (neighborFlags + totalLeftUnits - 1 - numLeftUnits) );
+    storch::target_availability = 0;
+    
+    printf(".... Real Availability results:\n");
+    printf(".... | tuWidth _____________ %d\n", tuWidth);
+    printf(".... | tuHeight ____________ %d\n", tuHeight);
+    printf(".... | predSize ____________ %d\n", predSize);
+    printf(".... | predHSize ___________ %d\n", predHSize);
+    printf(".... | predStride __________ %d\n", predStride);
+    printf(".... | unitWidth ___________ %d\n", unitWidth);
+    printf(".... | unitHeight __________ %d\n", unitHeight);
+    printf(".... | totalAboveUnits _____ %d\n", totalAboveUnits);
+    printf(".... | totalLeftUnits ______ %d\n", totalLeftUnits);
+    printf(".... | totalUnits __________ %d\n", totalUnits);
+    printf(".... --- isAboveLeftAvail __ %d\n", aboveLeft);
+    printf(".... | numAboveUnits _______ %d\n", numAboveUnits);
+    printf(".... --- isAboveAvail ______ %d\n", above);
+    printf(".... | numLeftUnits ________ %d\n", numLeftUnits);
+    printf(".... --- isLeftAvail _______ %d\n",  left);
+    printf(".... | numAboveRightUnits __ %d\n", numAboveRightUnits);
+    printf(".... --- isAboveRightAvail _ %d\n", aboveRight);
+    printf(".... | numLeftBelowUnits ___ %d\n", numLeftBelowUnits);
+    printf(".... --- isBelowLeftAvail __ %d\n", belowLeft);
+  }
+  
   // This points to the top-left unit (left references go from 0 to totalLeftUnits-1. totalLeftUnits is the top-left unit)
   neighborFlags[totalLeftUnits] = isAboveLeftAvailable( cu, chType, posLT );
   numIntraNeighbor += neighborFlags[totalLeftUnits] ? 1 : 0;
@@ -1063,6 +1081,8 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
     // Fill top-left sample(s) if available
     ptrSrc = srcBuf - (1 + multiRefIdx) * srcStride - (1 + multiRefIdx);
     ptrDst = refBufUnfiltered;
+    
+    // If top-left is available...
     if (neighborFlags[totalLeftUnits])
     {
       ptrDst[0] = ptrSrc[0];
@@ -1127,8 +1147,10 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
     // pad from first available down to the last below-left
     ptrDst = refBufUnfiltered;
     int lastAvailUnit = 0;
+    // If the last below-left is not available...
     if (!neighborFlags[0])
     {
+      // Run the units, from lowest below-left to uppermost left, then top-left, and then right towards above-right, looking for the first available unit
       int firstAvailUnit = 1;
       while (firstAvailUnit < totalUnits && !neighborFlags[firstAvailUnit])
       {
@@ -1138,14 +1160,17 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
       // first available sample
       int firstAvailRow = -1;
       int firstAvailCol = 0;
+      // If at least one of the left/below-left samples are available...
       if (firstAvailUnit < totalLeftUnits)
       {
         firstAvailRow = (totalLeftUnits - firstAvailUnit) * unitHeight + multiRefIdx;
       }
+      // If the first available unit is the top-left unit...
       else if (firstAvailUnit == totalLeftUnits)
       {
         firstAvailRow = multiRefIdx;
       }
+      // Else, the first available unit is above the CU
       else
       {
         firstAvailCol = (firstAvailUnit - totalLeftUnits - 1) * unitWidth + 1 + multiRefIdx;
@@ -1269,11 +1294,16 @@ bool isAboveLeftAvailable(const CodingUnit &cu, const ChannelType &chType, const
   const CodingStructure& cs = *cu.cs;
   const Position refPos = posLT.offset(-1, -1);
 
+  if(storch::target_availability)
+    printf("isAboveLeft?  Cur,Ref\n");
+  
   if (!cs.isDecomp(refPos, chType))
   {
+    if(storch::target_availability) printf(".... @@       NULL-1\n");
     return false;
   }
 
+  
   return (cs.getCURestricted(refPos, cu, chType) != nullptr);
 }
 
@@ -1286,6 +1316,9 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType &chType, const Posi
   //                    numAboveUnits * unitWidth
   const int maxDx      = numUnitsInPu * unitWidth;
 
+  if(storch::target_availability)
+    printf("isAbove?      Cur,Ref\n");
+  
   // Check if one unit is available and proceeds to the next, until all units above are updated
   for (int dx = 0; dx < maxDx; dx += unitWidth)
   {
@@ -1294,6 +1327,7 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType &chType, const Posi
 
     if (!cs.isDecomp(refPos, chType))
     {
+      if(storch::target_availability) printf(".... @@       NULL-1\n");
       break;
     }
 
@@ -1316,12 +1350,15 @@ int isLeftAvailable(const CodingUnit &cu, const ChannelType &chType, const Posit
   int       numIntra = 0;
   const int maxDy    = numUnitsInPu * unitHeight;
 
+  if(storch::target_availability)
+    printf("isLeft?     Cur,Ref\n");
   for (int dy = 0; dy < maxDy; dy += unitHeight)
   {
     const Position refPos = posLT.offset(-1, dy);
 
     if (!cs.isDecomp(refPos, chType))
     {
+      if(storch::target_availability) printf(".... @@       NULL-1\n");
       break;
     }
 
@@ -1343,12 +1380,15 @@ int isAboveRightAvailable(const CodingUnit &cu, const ChannelType &chType, const
   int       numIntra = 0;
   const int maxDx    = numUnitsInPu * unitWidth;
 
+  if(storch::target_availability)
+    printf("isAboveRight? Curr,Ref\n");
   for (int dx = 0; dx < maxDx; dx += unitWidth)
   {
     const Position refPos = posRT.offset(unitWidth + dx, -1);
 
     if (!cs.isDecomp(refPos, chType))
     {
+      if(storch::target_availability) printf(".... @@       NULL-1\n");
       break;
     }
 
@@ -1370,12 +1410,15 @@ int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType &chType, const 
   int       numIntra = 0;
   const int maxDy    = numUnitsInPu * unitHeight;
 
+  if(storch::target_availability)
+    printf("isBelowLeft?  curr,ref\n");
   for (int dy = 0; dy < maxDy; dy += unitHeight)
   {
     const Position refPos = posLB.offset(-1, unitHeight + dy);
 
     if (!cs.isDecomp(refPos, chType))
     {
+      if(storch::target_availability) printf(".... @@       NULL-1\n");
       break;
     }
 
@@ -1898,7 +1941,7 @@ void IntraPrediction::initIntraMip( const PredictionUnit &pu, const CompArea &ar
 
 void IntraPrediction::predIntraMip( const ComponentID compId, PelBuf &piPred, const PredictionUnit &pu )
 {
-  if(TRACE_estIntraPredLumaQT 
+  if(TRACE_estIntraPredLumaQT && TRACE_innerResults
     && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
     && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
   ){

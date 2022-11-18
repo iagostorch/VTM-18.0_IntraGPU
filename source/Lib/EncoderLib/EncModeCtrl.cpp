@@ -47,6 +47,8 @@
 
 #include "CommonLib/dtrace_next.h"
 
+#include "CommonLib/storchmain.h"
+
 #include <cmath>
 
 using namespace std;
@@ -1404,13 +1406,13 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
   ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
 
   // Fast checks, partitioning depended
-  if (cuECtx.isHashPerfectMatch && encTestmode.type != ETM_MERGE_SKIP && encTestmode.type != ETM_INTER_ME && encTestmode.type != ETM_AFFINE && encTestmode.type != ETM_MERGE_GEO)
+  if (ENABLE_SPLIT_HEURISTICS && cuECtx.isHashPerfectMatch && encTestmode.type != ETM_MERGE_SKIP && encTestmode.type != ETM_INTER_ME && encTestmode.type != ETM_AFFINE && encTestmode.type != ETM_MERGE_GEO)
   {
     return false;
   }
 
   // if early skip detected, skip all modes checking but the splits
-  if( cuECtx.earlySkip && m_pcEncCfg->getUseEarlySkipDetection() && !isModeSplit( encTestmode ) && !( isModeInter( encTestmode ) ) )
+  if( ENABLE_SPLIT_HEURISTICS && cuECtx.earlySkip && m_pcEncCfg->getUseEarlySkipDetection() && !isModeSplit( encTestmode ) && !( isModeInter( encTestmode ) ) )
   {
     return false;
   }
@@ -1452,12 +1454,12 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
 
   CodedCUInfo    &relatedCU          = getBlkInfo( partitioner.currArea() );
 
-  if( cuECtx.minDepth > partitioner.currQtDepth && partitioner.canSplit( CU_QUAD_SPLIT, cs ) )
+  if( ENABLE_SPLIT_HEURISTICS && cuECtx.minDepth > partitioner.currQtDepth && partitioner.canSplit( CU_QUAD_SPLIT, cs ) )
   {
     // enforce QT
     return encTestmode.type == ETM_SPLIT_QT;
   }
-  else if( encTestmode.type == ETM_SPLIT_QT && cuECtx.maxDepth <= partitioner.currQtDepth )
+  else if( ENABLE_SPLIT_HEURISTICS && encTestmode.type == ETM_SPLIT_QT && cuECtx.maxDepth <= partitioner.currQtDepth )
   {
     // don't check this QT depth
     return false;
@@ -1471,7 +1473,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
 
   if( encTestmode.type == ETM_INTRA )
   {
-    if( getFastDeltaQp() )
+    if( ENABLE_SPLIT_HEURISTICS && getFastDeltaQp() )
     {
       if( cs.area.lumaSize().width > cs.pcv->fastDeltaQPCuMaxSize )
       {
@@ -1481,15 +1483,22 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
 
     if( m_pcEncCfg->getUseFastLCTU() && partitioner.currArea().lumaSize().area() > 4096 )
     {
-      return (m_pcEncCfg->getDualITree() == 0 && m_pcEncCfg->getMaxMTTHierarchyDepthI() == 0 && cs.sps->getMinQTSize(cs.slice->getSliceType(), partitioner.chType) > 64);
+      if(ENABLE_SPLIT_HEURISTICS){
+        return (m_pcEncCfg->getDualITree() == 0 && m_pcEncCfg->getMaxMTTHierarchyDepthI() == 0 && cs.sps->getMinQTSize(cs.slice->getSliceType(), partitioner.chType) > 64);
+      }
+      else{
+        if(m_pcEncCfg->getDualITree() == 0 && m_pcEncCfg->getMaxMTTHierarchyDepthI() == 0 && cs.sps->getMinQTSize(cs.slice->getSliceType(), partitioner.chType) > 64){
+          return true;
+        }
+      }
     }
 
-    if (CS::isDualITree(cs) && (partitioner.currArea().lumaSize().width > 64 || partitioner.currArea().lumaSize().height > 64))
+    if (ENABLE_SPLIT_HEURISTICS && CS::isDualITree(cs) && (partitioner.currArea().lumaSize().width > 64 || partitioner.currArea().lumaSize().height > 64))
     {
       return false;
     }
 
-    if (m_pcEncCfg->getUsePbIntraFast() && (!cs.slice->isIntra() || cs.slice->getSPS()->getIBCFlag()) && !interHadActive(cuECtx) && cuECtx.bestCU && !CU::isIntra(*cuECtx.bestCU))
+    if (ENABLE_SPLIT_HEURISTICS && m_pcEncCfg->getUsePbIntraFast() && (!cs.slice->isIntra() || cs.slice->getSPS()->getIBCFlag()) && !interHadActive(cuECtx) && cuECtx.bestCU && !CU::isIntra(*cuECtx.bestCU))
     {
       return false;
     }
@@ -1507,7 +1516,8 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
     {
       return true;
     }
-    if( !( slice.isIntra() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
+    if( ENABLE_SPLIT_HEURISTICS && 
+        !( slice.isIntra() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
       ((!m_pcEncCfg->getDisableIntraPUsInInterSlices()) && (!relatedCU.isInter || !relatedCU.isIBC) && (
                                          ( cuECtx.bestTU->cbf[0] != 0 ) ||
            ( ( numComp > COMPONENT_Cb ) && cuECtx.bestTU->cbf[1] != 0 ) ||
@@ -1516,7 +1526,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
     {
       return false;
     }
-    if ((m_pcEncCfg->getIBCFastMethod() & IBC_FAST_METHOD_NOINTRA_IBCCBF0)
+    if (ENABLE_SPLIT_HEURISTICS && (m_pcEncCfg->getIBCFastMethod() & IBC_FAST_METHOD_NOINTRA_IBCCBF0)
       && (bestMode.type == ETM_IBC || bestMode.type == ETM_IBC_MERGE)
       && (!cuECtx.bestCU->Y().valid() || cuECtx.bestTU->cbf[0] == 0)
       && (!cuECtx.bestCU->Cb().valid() || cuECtx.bestTU->cbf[1] == 0)
@@ -1524,7 +1534,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
     {
       return false;
     }
-    if( lastTestMode().type != ETM_INTRA && cuECtx.bestCS && cuECtx.bestCU && interHadActive( cuECtx ) )
+    if( ENABLE_SPLIT_HEURISTICS && lastTestMode().type != ETM_INTRA && cuECtx.bestCS && cuECtx.bestCU && interHadActive( cuECtx ) )
     {
       // Get SATD threshold from best Inter-CU
       if (!cs.slice->isIntra() && m_pcEncCfg->getUsePbIntraFast() && !cs.slice->getDisableSATDForRD())
@@ -1539,7 +1549,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
         }
       }
     }
-    if (bestMode.type == ETM_PALETTE && !slice.isIntra() && partitioner.treeType == TREE_D && !(partitioner.currArea().lumaSize().width == 4 && partitioner.currArea().lumaSize().height == 4)) // inter slice
+    if (ENABLE_SPLIT_HEURISTICS && bestMode.type == ETM_PALETTE && !slice.isIntra() && partitioner.treeType == TREE_D && !(partitioner.currArea().lumaSize().width == 4 && partitioner.currArea().lumaSize().height == 4)) // inter slice
     {
       return false;
     }
@@ -1653,7 +1663,8 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
       {
         if( ( m_ComprCUCtxList.end() - i )->get<bool>( IS_BEST_NOSPLIT_SKIP ) )
         {
-          skipScore += 1;
+          if(ENABLE_SPLIT_HEURISTICS)
+            skipScore += 1;
         }
         else
         {
@@ -1730,7 +1741,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
       }
     }
 
-    if( bestCU && bestCU->skip && bestCU->mtDepth >= m_skipThreshold && !isModeSplit( cuECtx.lastTestMode ) )
+    if( ENABLE_SPLIT_HEURISTICS && bestCU && bestCU->skip && bestCU->mtDepth >= m_skipThreshold && !isModeSplit( cuECtx.lastTestMode ) )
     {
       return false;
     }
@@ -1741,7 +1752,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
     {
       case CU_QUAD_SPLIT:
         {
-          if( !cuECtx.get<bool>( QT_BEFORE_BT ) && bestCU )
+          if( ENABLE_SPLIT_HEURISTICS && !cuECtx.get<bool>( QT_BEFORE_BT ) && bestCU )
           {
             unsigned maxBTD        = cs.pcv->getMaxBtDepth( slice, partitioner.chType );
             const CodingUnit *cuBR = bestCS->cus.back();
@@ -1755,11 +1766,11 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
               return false;
             }
           }
-          if( m_pcEncCfg->getUseEarlyCU() && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip )
+          if( ENABLE_SPLIT_HEURISTICS && m_pcEncCfg->getUseEarlyCU() && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip )
           {
             return false;
           }
-          if( getFastDeltaQp() && width <= slice.getPPS()->pcv->fastDeltaQPCuMaxSize )
+          if( ENABLE_SPLIT_HEURISTICS && getFastDeltaQp() && width <= slice.getPPS()->pcv->fastDeltaQPCuMaxSize )
           {
             return false;
           }
@@ -1772,23 +1783,23 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
         featureToSet = DID_VERT_SPLIT;
         break;
       case CU_TRIH_SPLIT:
-        if( cuECtx.get<bool>( DID_HORZ_SPLIT ) && bestCU && bestCU->btDepth == partitioner.currBtDepth && !bestCU->rootCbf )
+        if( ENABLE_SPLIT_HEURISTICS && cuECtx.get<bool>( DID_HORZ_SPLIT ) && bestCU && bestCU->btDepth == partitioner.currBtDepth && !bestCU->rootCbf )
         {
           return false;
         }
 
-        if( !cuECtx.get<bool>( DO_TRIH_SPLIT ) )
+        if( ENABLE_SPLIT_HEURISTICS && !cuECtx.get<bool>( DO_TRIH_SPLIT ) )
         {
           return false;
         }
         break;
       case CU_TRIV_SPLIT:
-        if( cuECtx.get<bool>( DID_VERT_SPLIT ) && bestCU && bestCU->btDepth == partitioner.currBtDepth && !bestCU->rootCbf )
+        if( ENABLE_SPLIT_HEURISTICS && cuECtx.get<bool>( DID_VERT_SPLIT ) && bestCU && bestCU->btDepth == partitioner.currBtDepth && !bestCU->rootCbf )
         {
           return false;
         }
 
-        if( !cuECtx.get<bool>( DO_TRIV_SPLIT ) )
+        if( ENABLE_SPLIT_HEURISTICS && !cuECtx.get<bool>( DO_TRIV_SPLIT ) )
         {
           return false;
         }
@@ -1803,7 +1814,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
     {
       case CU_HORZ_SPLIT:
       case CU_TRIH_SPLIT:
-        if( cuECtx.get<bool>( QT_BEFORE_BT ) && cuECtx.get<bool>( DID_QUAD_SPLIT ) )
+        if( ENABLE_SPLIT_HEURISTICS && cuECtx.get<bool>( QT_BEFORE_BT ) && cuECtx.get<bool>( DID_QUAD_SPLIT ) )
         {
           if( cuECtx.get<int>( MAX_QT_SUB_DEPTH ) > partitioner.currQtDepth + 1 )
           {
@@ -1814,7 +1825,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
             return false;
           }
         }
-        if (m_pcEncCfg->getFastTTskip() && split == CU_TRIH_SPLIT)
+        if (ENABLE_SPLIT_HEURISTICS && m_pcEncCfg->getFastTTskip() && split == CU_TRIH_SPLIT)
         {
           bool skipTtSplitMode = xSkipTreeCandidate(getPartSplit(encTestmode), cs.splitRdCostBest, m_slice->getSliceType());
           if (skipTtSplitMode)
@@ -1825,7 +1836,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
         break;
       case CU_VERT_SPLIT:
       case CU_TRIV_SPLIT:
-        if( cuECtx.get<bool>( QT_BEFORE_BT ) && cuECtx.get<bool>( DID_QUAD_SPLIT ) )
+        if( ENABLE_SPLIT_HEURISTICS && cuECtx.get<bool>( QT_BEFORE_BT ) && cuECtx.get<bool>( DID_QUAD_SPLIT ) )
         {
           if( cuECtx.get<int>( MAX_QT_SUB_DEPTH ) > partitioner.currQtDepth + 1 )
           {
@@ -1836,7 +1847,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
             return false;
           }
         }
-        if (m_pcEncCfg->getFastTTskip() && split == CU_TRIV_SPLIT) {
+        if (ENABLE_SPLIT_HEURISTICS && m_pcEncCfg->getFastTTskip() && split == CU_TRIV_SPLIT) {
           bool skipTtSplitMode = xSkipTreeCandidate(getPartSplit(encTestmode), cs.splitRdCostBest, m_slice->getSliceType());
           if (skipTtSplitMode)
           {
@@ -1865,7 +1876,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
       }
     }
     return true;
-  }
+  } // the end of if( isModeSplit( encTestmode ) )
   else
   {
     CHECK( encTestmode.type != ETM_POST_DONT_SPLIT, "Unknown mode" );
@@ -1880,7 +1891,8 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
     }
     if( !bestCS || ( bestCS && isModeSplit( bestMode ) ) )
     {
-      return false;
+      if(ENABLE_SPLIT_HEURISTICS)
+        return false;
     }
     else
     {
@@ -1888,7 +1900,7 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
       setFromCs( *bestCS, partitioner );
 
 #endif
-      if( partitioner.modeType == MODE_TYPE_INTRA && partitioner.chType == CHANNEL_TYPE_LUMA )
+      if( ENABLE_SPLIT_HEURISTICS && partitioner.modeType == MODE_TYPE_INTRA && partitioner.chType == CHANNEL_TYPE_LUMA )
       {
         return false; //not set best coding mode for intra coding pass
       }
@@ -1994,6 +2006,8 @@ bool EncModeCtrlMTnoRQT::tryMode( const EncTestMode& encTestmode, const CodingSt
 
     return false;
   }
+    
+    return true;
 }
 
 bool EncModeCtrlMTnoRQT::xSkipTreeCandidate(const PartSplit split, const double* splitRdCostBest, const SliceType& sliceType) const

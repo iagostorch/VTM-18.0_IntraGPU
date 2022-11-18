@@ -16,6 +16,7 @@
 int storch::var, storch::numExtractedBlocks;
 int storch::extractedFrames[EXT_NUM][500];
 int storch::targetBlock;
+int storch::target_availability;
 
 storch::storch() {
   for(int i=0; i<EXT_NUM; i++){
@@ -26,6 +27,7 @@ storch::storch() {
   var = 0;
   numExtractedBlocks = 0;
   targetBlock=0;
+  target_availability=0;
 }
 
 void storch::finishEncoding(){

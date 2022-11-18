@@ -24,19 +24,21 @@
 
 // My directives
 
-#define TRACE_estIntraOredLumaQT 1
-#define TRACE_neighborAvailability 1
-#define TRACE_estIntraPredLumaQT 1
-#define TRACE_predefinedSize 1
-#define TRACE_predefinedWidth 32
-#define TRACE_predefinedHeight 32
-#define TRACE_predefinedPosition 1
-#define TRACE_predefinedX 64
-#define TRACE_predefinedY 768
+#define TRACE_neighborAvailability 0
+#define TRACE_estIntraPredLumaQT 1      // Print the data in each call of estIntraPredLumaQT()
+#define TRACE_predefinedSize 1          // Only trace a predefined size of CU
+#define TRACE_predefinedWidth 64
+#define TRACE_predefinedHeight 64
+#define TRACE_predefinedPosition 1      // Only trace CUs in a predefined position
+#define TRACE_predefinedX 128
+#define TRACE_predefinedY 128
+#define TRACE_innerResults 1            // Trace some inner results of the prediction, such as reduced boundaries, subsampled and complete prediction signal for MIP
+#define TRACE_fineGrainedNeighborAvailability 1  // Fine-grained details of what neighboring units are available for intra references
 
-#define EXTRACT_predictedBlock 1
-#define EXTRACT_predictedReducedBlock 1
-#define EXTRACT_frames 1
+#define EXTRACT_blockData 1
+#define EXTRACT_frames 1                // Extract the original, true original, predicted and reconstructed frame
+
+#define ENABLE_SPLIT_HEURISTICS 1
 
 using namespace std;
 
@@ -65,6 +67,7 @@ class storch{
         static void exportIntraReferences(Pel *buffer, CodingUnit cu, SamplesType type);
         static int numExtractedBlocks;
         static int targetBlock;
+        static int target_availability;
         
     private:
         static int var;
