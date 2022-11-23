@@ -147,7 +147,8 @@ void MatrixIntraPrediction::predBlock(int *const result, const int modeIdx, cons
   const int* const reducedBoundary = transpose ? m_reducedBoundaryTransposed.data() : m_reducedBoundary.data();
   computeReducedPred(reducedPred, reducedBoundary, matrix, transpose, bitDepth);
   
-  if(TRACE_innerResults && storch::targetBlock){
+  if(TRACE_innerResults && (storch::targetBlock || storch::targetBlock_multSizes)){
+    
     printf(" ## INSIDE PREDICTION OF REDUCED BLOCK...............\n");
     printf("    ## Reduced boundary:\n");
     for(int i=0; i<8; i++)
@@ -164,6 +165,7 @@ void MatrixIntraPrediction::predBlock(int *const result, const int modeIdx, cons
     }
     
   }
+  
   
   if( needUpsampling )
   {

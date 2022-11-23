@@ -715,11 +715,36 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   const bool isEncodeGdrClean = cs.sps->getGDREnabledFlag() && cs.pcv->isEncoder && cs.picHeader->getInGdrInterval() && cs.isClean(pu.Y().topRight(), CHANNEL_TYPE_LUMA);
 #endif
   
-  if(TRACE_estIntraPredLumaQT 
-    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-  ){
-    printf("estIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
+  storch::targetBlock_multSizes = TRACE_multipleCusInCtu;
+  
+  int ctuX, ctuY;
+  // Get coordinates of current CTU
+  ctuX = (cu.lx()>>7)<<7;
+  ctuY = (cu.ly()>>7)<<7;
+  //   Filter CUs for correct CTU, dimension and alignment
+  storch::targetBlock_multSizes &= ctuX==TRACE_predefinedX;
+  storch::targetBlock_multSizes &= ctuY==TRACE_predefinedY;
+  // Proper size
+  storch::targetBlock_multSizes &= (
+                                      (cu.lwidth()==64 && cu.lheight()==64) ||
+                                      (cu.lwidth()==32 && cu.lheight()==32) ||
+                                      (cu.lwidth()==16 && cu.lheight()==16)
+          );
+  // Proper alignment
+  storch::targetBlock_multSizes &= (
+                                      (cu.lx()%cu.lwidth()==0) &&
+                                      (cu.ly()%cu.lheight()==0)
+          );
+  
+  int shouldTrace = TRACE_estIntraPredLumaQT;  
+  shouldTrace &=   ( storch::targetBlock_multSizes ||
+                      (     ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
+                         && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
+                      )
+                    );
+  
+  if( shouldTrace ){
+    printf("\nestIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
   
     
     

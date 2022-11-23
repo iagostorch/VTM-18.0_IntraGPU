@@ -27,14 +27,16 @@
 
 #define TRACE_neighborAvailability 0
 #define TRACE_estIntraPredLumaQT 1      // Print the data in each call of estIntraPredLumaQT()
+#define TRACE_multipleCusInCtu 1        // When enabled, trace multiple CU sizes inside the same CTU. The CTU position is defined by the predefined X and Y positions
+//     IMPORTANT                        // When multipleCusInCtu is enabled, predefinedSize must be enabled with a wrong predefinedWidth and height
 #define TRACE_predefinedSize 1          // Only trace a predefined size of CU
-#define TRACE_predefinedWidth 64
+#define TRACE_predefinedWidth 11
 #define TRACE_predefinedHeight 64
-#define TRACE_predefinedPosition 1      // Only trace CUs in a predefined position
+#define TRACE_predefinedPosition 0      // Only trace CUs in a predefined position
 #define TRACE_predefinedX 128
 #define TRACE_predefinedY 128
 #define TRACE_innerResults 1            // Trace some inner results of the prediction, such as reduced boundaries, subsampled and complete prediction signal for MIP
-#define TRACE_fineGrainedNeighborAvailability 1  // Fine-grained details of what neighboring units are available for intra references
+#define TRACE_fineGrainedNeighborAvailability 0  // Fine-grained details of what neighboring units are available for intra references
 
 #define EXTRACT_blockData 1
 #define EXTRACT_frames 1                // Extract the original, true original, predicted and reconstructed frame
@@ -72,6 +74,7 @@ class storch{
         static void exportIntraReferences(Pel *buffer, CodingUnit cu, SamplesType type);
         static int numExtractedBlocks;
         static int targetBlock;
+        static int targetBlock_multSizes; // used to trace multiple CU sizes on the same CTU
         static int target_availability;
         
         // Tracking intra prediction time

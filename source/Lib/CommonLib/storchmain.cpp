@@ -17,6 +17,7 @@
 int storch::var, storch::numExtractedBlocks;
 int storch::extractedFrames[EXT_NUM][500];
 int storch::targetBlock;
+int storch::targetBlock_multSizes;
 int storch::target_availability;
 
 struct timeval storch::rmdGen1, storch::rmdGen2, storch::rmdHevc1, storch::rmdHevc2, storch::rmdVvc1, storch::rmdVvc2, storch::rmdMrl1, storch::rmdMrl2, storch::rmdMip1, storch::rmdMip2, storch::rdoGen1, storch::rdoGen2, storch::rdoIsp1, storch::rdoIsp2; 
@@ -36,6 +37,7 @@ storch::storch() {
   var = 0;
   numExtractedBlocks = 0;
   targetBlock=0;
+  targetBlock_multSizes=0;
   target_availability=0;
   
   intraRmdGenTime = 0.0;

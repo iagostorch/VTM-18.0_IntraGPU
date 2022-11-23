@@ -1003,6 +1003,10 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
 
   std::fill_n(neighborFlags, totalUnits, false);
 
+  
+  
+  
+  
   if(TRACE_estIntraPredLumaQT && TRACE_innerResults
     && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
     && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
@@ -1962,9 +1966,10 @@ void IntraPrediction::initIntraMip( const PredictionUnit &pu, const CompArea &ar
 
 void IntraPrediction::predIntraMip( const ComponentID compId, PelBuf &piPred, const PredictionUnit &pu )
 {
-  if(TRACE_estIntraPredLumaQT && TRACE_innerResults
+  if(storch::targetBlock_multSizes || 
+          (TRACE_estIntraPredLumaQT && TRACE_innerResults
     && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
-    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
+    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly())))
   ){
     printf(".... Doing MIP prediction. Mode %d %s\n", pu.intraDir[CHANNEL_TYPE_LUMA], pu.mipTransposedFlag ? "TRANSP" : "NOT TRAN");
   }
