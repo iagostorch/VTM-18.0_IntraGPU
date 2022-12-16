@@ -69,6 +69,7 @@ class DistParam
 public:
   CPelBuf               org;
   CPelBuf               cur;
+  int                   extract_rd; // Used to extract intermediate costs in 4x4 HAD computation
 #if WCG_EXT
   CPelBuf               orgLuma;
 #endif
@@ -181,6 +182,7 @@ public:
 
   void           setDistParam( DistParam &rcDP, const CPelBuf &org, const Pel* piRefY , int iRefStride, int bitDepth, ComponentID compID, int subShiftMode = 0, int step = 1, bool useHadamard = false );
   void           setDistParam( DistParam &rcDP, const CPelBuf &org, const CPelBuf &cur, int bitDepth, ComponentID compID, bool useHadamard = false );
+  void           setDistParam_GPU( DistParam &rcDP, const CPelBuf &org, const CPelBuf &cur, int bitDepth, ComponentID compID, bool useHadamard = false );
   void           setDistParam( DistParam &rcDP, const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShiftMode = 0, int step = 1, bool useHadamard = false, bool bioApplied = false );
   void           setDistParam( DistParam &rcDP, const CPelBuf &org, const Pel* piRefY, int iRefStride, const Pel* mask, int iMaskStride, int stepX, int iMaskStride2, int bitDepth,  ComponentID compID);
 
@@ -388,6 +390,7 @@ private:
   static Distortion xGetMRHADs        ( const DistParam& pcDtParam );
 
   static Distortion xGetHADs          ( const DistParam& pcDtParam );
+  static Distortion xGetHAD4          ( const DistParam &rcDtParam ); // This distortion is used in affine only when GPU_ME is true
   static Distortion xCalcHADs2x2(const Pel *piOrg, const Pel *piCurr, int strideOrg, int strideCur, int step);
   static Distortion xCalcHADs4x4(const Pel *piOrg, const Pel *piCurr, int strideOrg, int strideCur, int step);
   static Distortion xCalcHADs8x8(const Pel *piOrg, const Pel *piCurr, int strideOrg, int strideCur, int step);

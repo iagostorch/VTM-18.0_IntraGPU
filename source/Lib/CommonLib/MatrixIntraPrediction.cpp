@@ -166,11 +166,10 @@ void MatrixIntraPrediction::predBlock(int *const result, const int modeIdx, cons
     
   }
   
-  
   if( needUpsampling )
   {
     predictionUpsampling( result, reducedPred );
-    if(TRACE_innerResults && storch::targetBlock){
+    if(0 && TRACE_innerResults && (storch::targetBlock || storch::targetBlock_multSizes)){
       printf("    ## Prediction signal after upsampling:\n");
       for(int i=0; i<TRACE_predefinedWidth; i++){
         for(int j=0; j<TRACE_predefinedHeight; j++){

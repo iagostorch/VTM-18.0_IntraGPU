@@ -746,8 +746,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   if( shouldTrace ){
     printf("\nestIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
   
-    
-    
     PartitioningStack z = partitioner.getPartStack();
 
     // Print the sequence of splits (QT, TH, TV, BH, BV) that led to the current CU
@@ -826,6 +824,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
           DistParam distParamSad;
           DistParam distParamHad;
+          DistParam distParamHad_4x4; // Used to compute the distortion based on 4x4 HAD for GPU processing
+          
           if (cu.slice->getLmcsEnabledFlag() && m_pcReshape->getCTUFlag())
           {
             CompArea tmpArea(COMPONENT_Y, area.chromaFormat, Position(0, 0), area.size());
@@ -836,6 +836,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                                      false);   // Use SAD cost
             m_pcRdCost->setDistParam(distParamHad, tmpOrg, piPred, sps.getBitDepth(CHANNEL_TYPE_LUMA), COMPONENT_Y,
                                      true);   // Use HAD (SATD) cost
+            m_pcRdCost->setDistParam_GPU(distParamHad_4x4, tmpOrg, piPred, sps.getBitDepth(CHANNEL_TYPE_LUMA), COMPONENT_Y,
+                                     true);   // Use HAD 4x4 (SATD) cost for GPU-based prediction
+            
           }
           else
           {
@@ -843,6 +846,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                                      false);   // Use SAD cost
             m_pcRdCost->setDistParam(distParamHad, piOrg, piPred, sps.getBitDepth(CHANNEL_TYPE_LUMA), COMPONENT_Y,
                                      true);   // Use HAD (SATD) cost
+            m_pcRdCost->setDistParam_GPU(distParamHad_4x4, piOrg, piPred, sps.getBitDepth(CHANNEL_TYPE_LUMA), COMPONENT_Y,
+                                     true);   // Use HAD 4x4 (SATD) cost for GPU-based prediction
           }
 
           distParamSad.applyWeight = false;
@@ -902,8 +907,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               predIntraAng(COMPONENT_Y, piPred, pu);
               // Use the min between SAD and HAD as the cost criterion
               // SAD is scaled by 2 to align with the scaling of HAD
-              minSadHad += std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
-
+              minSadHad += std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));              
+                            
               // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
               m_CABACEstimator->getCtx() = SubCtx( Ctx::MipFlag, ctxStartMipFlag );
               m_CABACEstimator->getCtx() = SubCtx( Ctx::ISPMode, ctxStartIspMode );
@@ -1007,7 +1012,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                     // SAD is scaled by 2 to align with the scaling of HAD
                     Distortion minSadHad =
                       std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
-
+                    
                     // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been
                     // pre-estimated.
                     m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);
@@ -1096,7 +1101,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                   // SAD is scaled by 2 to align with the scaling of HAD
                   Distortion minSadHad =
                     std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
-
+                  
                   // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
                   m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);
                   m_CABACEstimator->getCtx() = SubCtx(Ctx::ISPMode, ctxStartIspMode);
@@ -1257,10 +1262,24 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 // SAD is scaled by 2 to align with the scaling of HAD               
                 Distortion minSadHad =
                   std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
-
-                if(storch::targetBlock && TRACE_innerResults)
-                  printf("SAD distortion PRE x2 SCALE %ld\n\n", distParamSad.distFunc(distParamSad));
                 
+                // Select set of specific blocks to avoid modifying header files when debugging
+//                int specificBlock = 0;
+//                specificBlock |= (pu.lx()==192 && pu.ly()==192 && pu.lwidth()==64 && pu.lheight()==64);
+//                specificBlock |= (pu.lx()==240 && pu.ly()==240 && pu.lwidth()==16 && pu.lheight()==16);
+//                specificBlock |= (pu.lx()==224 && pu.ly()==224 && pu.lwidth()==32 && pu.lheight()==32);
+//                specificBlock |= (pu.lx()==224 && pu.ly()==224 && pu.lwidth()==16 && pu.lheight()==16); 
+//                specificBlock |= (pu.lx()==1904 && pu.ly()==1056 && pu.lwidth()==16 && pu.lheight()==16);
+                
+                if((storch::targetBlock || storch::targetBlock_multSizes) && TRACE_innerResults) {
+                    distParamHad_4x4.extract_rd = 1;
+                    printf("MIP SAD distortion PRE x2 SCALE %ld\n", distParamSad.distFunc(distParamSad));
+                    printf("MIP,M=%d,SATD Distortion ORG %ld\n", mode, distParamHad.distFunc(distParamHad));
+                    printf("MIP,M=%d,SATD Distortion 4x4 %ld\n\n", mode, distParamHad_4x4.distFunc(distParamHad_4x4));
+                }
+                 
+                distParamHad_4x4.extract_rd = 0;
+                  
                 m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);
 
                 uint64_t fracModeBits = xFracModeBitsIntra(pu, mode, CHANNEL_TYPE_LUMA);

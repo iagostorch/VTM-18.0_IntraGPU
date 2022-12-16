@@ -44,6 +44,8 @@
 
 #include <limits>
 
+#include "storchmain.h"
+
 //! \ingroup CommonLib
 //! \{
 
@@ -354,6 +356,50 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf &org, const CPelBuf &c
   rcDP.maximumDistortionForEarlyExit = std::numeric_limits<Distortion>::max();
 }
 
+// This function set the distortion parameter &rcDP to compute the distortion based on the 4x4 hadamard transform (the same used in GPU)
+void RdCost::setDistParam_GPU( DistParam &rcDP, const CPelBuf &org, const CPelBuf &cur, int bitDepth, ComponentID compID, bool useHadamard )
+{
+  rcDP.org          = org;
+  rcDP.cur          = cur;
+  rcDP.step         = 1;
+  rcDP.subShift     = 0;
+  rcDP.bitDepth     = bitDepth;
+  rcDP.compID       = compID;
+
+  const int DFOffset = ( rcDP.useMR ? DF_MRSAD - DF_SAD : 0 );
+  
+  // If not hadamard, then it is the same as non-GPU
+  if( !useHadamard )
+  {
+    if( org.width == 12 )
+    {
+      rcDP.distFunc = m_afpDistortFunc[ DF_SAD12 + DFOffset ];
+    }
+    else if( org.width == 24 )
+    {
+      rcDP.distFunc = m_afpDistortFunc[ DF_SAD24 + DFOffset ];
+    }
+    else if( org.width == 48 )
+    {
+      rcDP.distFunc = m_afpDistortFunc[ DF_SAD48 + DFOffset ];
+    }
+    else if( isPowerOf2( org.width) )
+    {
+      rcDP.distFunc = m_afpDistortFunc[ DF_SAD + DFOffset + floorLog2( org.width ) ];
+    }
+    else
+    {
+      rcDP.distFunc = m_afpDistortFunc[ DF_SAD + DFOffset ];
+    }
+  }
+  else // If hadamard, then we use the 4x4 HAD
+  {
+    rcDP.distFunc = xGetHAD4;
+  }
+
+  rcDP.maximumDistortionForEarlyExit = std::numeric_limits<Distortion>::max();
+}
+
 void RdCost::setDistParam( DistParam &rcDP, const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShiftMode, int step, bool useHadamard, bool bioApplied )
 {
   rcDP.bitDepth   = bitDepth;
@@ -434,7 +480,7 @@ Distortion RdCost::getDistPart( const CPelBuf &org, const CPelBuf &cur, int bitD
   {
     cDtParam.distFunc = m_afpDistortFunc[eDFunc];
   }
-
+    
   if (isChroma(compID))
   {
     return ((Distortion) (m_distortionWeight[ MAP_CHROMA(compID) ] * cDtParam.distFunc( cDtParam )));
@@ -2940,6 +2986,71 @@ Distortion RdCost::xCalcHADs8x4(const Pel *piOrg, const Pel *piCur, int strideOr
   sad  = ( int ) ( sad / sqrt( 4.0 * 8 ) * 2 );
 
   return sad;
+}
+
+// This distortion is used in MIP only when GPU_INTRA is true
+// It computes the distortion based on HAD 4x4 irrespective of the CU size
+Distortion RdCost::xGetHAD4( const DistParam &rcDtParam )
+{
+  if( rcDtParam.applyWeight )
+  {
+    return RdCostWeightPrediction::xGetHADsw( rcDtParam );
+  }
+  const Pel* piOrg = rcDtParam.org.buf;
+  const Pel* piCur = rcDtParam.cur.buf;
+  const int  iRows = rcDtParam.org.height;
+  const int  iCols = rcDtParam.org.width;
+  const int  iStrideCur = rcDtParam.cur.stride;
+  const int  iStrideOrg = rcDtParam.org.stride;
+  const int  iStep = rcDtParam.step;
+
+  int  x = 0, y = 0;
+
+  Distortion uiSum = 0;
+
+//   It is possible to extract intermediate SATDs based on the value of rcDtParam.extract_rd
+//    if(rcDtParam.extract_rd){
+//          printf("Extract the desired values on the following if/else structures\n");
+//    }
+  if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
+  {
+    int  iOffsetOrg = iStrideOrg << 2;
+    int  iOffsetCur = iStrideCur << 2;
+
+    for( y = 0; y < iRows; y += 4 )
+    {
+      for( x = 0; x < iCols; x += 4 )
+      {
+        uiSum += xCalcHADs4x4( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
+        if(1 && rcDtParam.extract_rd){ // Extract SATD of 4x4 sub-block
+          printf("  %dx%d,%ld\n", x, y, xCalcHADs4x4( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep ));
+        }
+      }
+      piOrg += iOffsetOrg;
+      piCur += iOffsetCur;
+    }
+  }
+  else if( ( iRows % 2 == 0 ) && ( iCols % 2 == 0 ) )
+  {
+    printf("ERROR: Entered in 2x2 SATD computation during affine prediction\n");
+    int  iOffsetOrg = iStrideOrg << 1;
+    int  iOffsetCur = iStrideCur << 1;
+    for( y = 0; y < iRows; y += 2 )
+    {
+      for( x = 0; x < iCols; x += 2 )
+      {
+        uiSum += xCalcHADs2x2( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
+      }
+      piOrg += iOffsetOrg;
+      piCur += iOffsetCur;
+    }
+  }
+  else
+  {
+    THROW( "Invalid size" );
+  }
+
+  return (uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth));
 }
 
 Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
