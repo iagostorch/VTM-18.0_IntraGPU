@@ -1260,8 +1260,16 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
                 // Use the min between SAD and HAD as the cost criterion
                 // SAD is scaled by 2 to align with the scaling of HAD               
-                Distortion minSadHad =
-                  std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
+                Distortion minSadHad;
+                
+                if(GPU_MIP){
+                  distParamHad_4x4.extract_rd = 0;
+                  minSadHad = std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad_4x4.distFunc(distParamHad_4x4));
+                }
+                else{
+                  minSadHad = std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
+                }
+                  
                 
                 // Select set of specific blocks to avoid modifying header files when debugging
 //                int specificBlock = 0;

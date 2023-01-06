@@ -3022,7 +3022,7 @@ Distortion RdCost::xGetHAD4( const DistParam &rcDtParam )
       for( x = 0; x < iCols; x += 4 )
       {
         uiSum += xCalcHADs4x4( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
-        if(1 && rcDtParam.extract_rd){ // Extract SATD of 4x4 sub-block
+        if(rcDtParam.extract_rd){ // Extract SATD of 4x4 sub-block
           printf("  %dx%d,%ld\n", x, y, xCalcHADs4x4( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep ));
         }
       }

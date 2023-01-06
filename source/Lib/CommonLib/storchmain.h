@@ -25,6 +25,8 @@
 
 // My directives
 
+#define GPU_MIP 1                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
+
 #define TRACE_neighborAvailability 0
 #define TRACE_estIntraPredLumaQT 1      // Print the data in each call of estIntraPredLumaQT()
 #define TRACE_multipleCusInCtu 0        // When enabled, trace multiple CU sizes inside the same CTU. The CTU position is defined by the predefined X and Y positions
