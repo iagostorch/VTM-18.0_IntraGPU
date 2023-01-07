@@ -28,7 +28,7 @@
 #define GPU_MIP 1                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
 
 #define TRACE_neighborAvailability 0
-#define TRACE_estIntraPredLumaQT 1      // Print the data in each call of estIntraPredLumaQT()
+#define TRACE_estIntraPredLumaQT 0      // Print the data in each call of estIntraPredLumaQT()
 #define TRACE_multipleCusInCtu 0        // When enabled, trace multiple CU sizes inside the same CTU. The CTU position is defined by the predefined X and Y positions
 //     IMPORTANT                        // When multipleCusInCtu is enabled, predefinedSize must be enabled with a wrong predefinedWidth and height
 #define TRACE_predefinedSize 1          // Only trace a predefined size of CU
@@ -37,13 +37,13 @@
 #define TRACE_predefinedPosition 1      // Only trace CUs in a predefined position
 #define TRACE_predefinedX 192
 #define TRACE_predefinedY 192
-#define TRACE_innerResults 1            // Trace some inner results of the prediction, such as reduced boundaries, subsampled and complete prediction signal for MIP
+#define TRACE_innerResults 0            // Trace some inner results of the prediction, such as reduced boundaries, subsampled and complete prediction signal for MIP
 #define TRACE_fineGrainedNeighborAvailability 0  // Fine-grained details of what neighboring units are available for intra references
 
 #define EXTRACT_blockData 0
 #define EXTRACT_frames 0                // Extract the original, true original, predicted and reconstructed frame
 
-#define ENABLE_SPLIT_HEURISTICS 1
+#define ENABLE_SPLIT_HEURISTICS 0
 
 // When both are disabled we conduct the vanilla intra prediction, with predicted samples from the same frame
 #define TEMPORAL_INTRA 0 // When enabled, the references for intra predictin are fetched from the previous reconstructed frame
@@ -65,6 +65,32 @@ typedef enum
   EXT_NUM
 } SamplesType;
 
+// This typedef is used to reference different CU sizes.
+// Currently, only supports square CUs with SizeId=2
+typedef enum
+{
+    _64x64,
+    _32x32,
+    _32x16,
+    _16x32,
+    _32x8,
+    _8x32,
+    _32x4,
+    _4x32,
+    _16x16,
+    _16x8,
+    _8x16,
+    _16x4,
+    _4x16,
+    _8x8,
+    _8x4,
+    _4x8,
+    _4x4,
+    OTHERS,
+    NUM_CU_SIZES
+} CuSize;
+
+
 class storch{
     public:
         storch();
@@ -79,6 +105,11 @@ class storch{
         static int targetBlock_multSizes; // used to trace multiple CU sizes on the same CTU
         static int target_availability;
         
+        // Translating CU dimensions into enum or strings
+        static CuSize translateCuSize(int width, int height);
+        static string translateCuSize(int cuSize);
+        static int getSizeId(CuSize size);
+
         // Tracking intra prediction time
         static void startIntraRmdPart1();
         static void finishIntraRmdPart1();
@@ -90,7 +121,7 @@ class storch{
         static void finishIntraRmdMrl();
 
         static void startIntraRmdMip();
-        static void finishIntraRmdMip();
+        static void finishIntraRmdMip(int width, int height);
 
         static void startIntraRmdGeneral();
         static void finishIntraRmdGeneral();
@@ -113,7 +144,8 @@ class storch{
         
         static struct timeval rmdGen1, rmdGen2, rmdHevc1, rmdHevc2, rmdVvc1, rmdVvc2, rmdMrl1, rmdMrl2, rmdMip1, rmdMip2, rdoGen1, rdoGen2, rdoIsp1, rdoIsp2; 
         static double intraRmdGenTime, intraRmd1Time, intraRmd2Time, intraRmdMrlTime, intraRmdMipTime, intraRdoGenTime, intraRdoIspTime;
-    
+        static double intraRmdMipTime_size[NUM_CU_SIZES], intraRmdMipTime_sizeId[3];
+        
         static PelBuf reconstructedPrev;
         static Picture previousPic;
         static PelStorage recoBuf;

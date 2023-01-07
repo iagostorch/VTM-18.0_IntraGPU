@@ -22,6 +22,7 @@ int storch::target_availability;
 
 struct timeval storch::rmdGen1, storch::rmdGen2, storch::rmdHevc1, storch::rmdHevc2, storch::rmdVvc1, storch::rmdVvc2, storch::rmdMrl1, storch::rmdMrl2, storch::rmdMip1, storch::rmdMip2, storch::rdoGen1, storch::rdoGen2, storch::rdoIsp1, storch::rdoIsp2; 
 double storch::intraRmdGenTime, storch::intraRmd1Time, storch::intraRmd2Time, storch::intraRmdMrlTime, storch::intraRmdMipTime, storch::intraRdoGenTime, storch::intraRdoIspTime;
+double storch::intraRmdMipTime_size[NUM_CU_SIZES], storch::intraRmdMipTime_sizeId[3];
 
 PelBuf storch::reconstructedPrev;
 Picture storch::previousPic;
@@ -48,6 +49,14 @@ storch::storch() {
   intraRdoGenTime = 0.0;
   intraRdoIspTime = 0.0;
   
+  intraRmdMipTime_sizeId[0] = 0.0;
+  intraRmdMipTime_sizeId[1] = 0.0;
+  intraRmdMipTime_sizeId[2] = 0.0;
+  
+  for(int i=0; i<NUM_CU_SIZES; i++){
+    intraRmdMipTime_size[i] = 0.0;
+  }
+  
   previousPic = Picture();
   recoBuf = PelStorage();
 }
@@ -68,6 +77,15 @@ void storch::finishEncoding(){
   cout << "  RDO ISPs              " << intraRdoIspTime << endl;
   cout << "  RDO Normal            " << intraRdoGenTime - intraRdoIspTime << endl;
 
+  cout << "Detailed MIP RMD times according to CU SIZE" << endl;
+  for(int size=0; size<NUM_CU_SIZES; size++){
+    cout << "  " << translateCuSize(size) << "  " << intraRmdMipTime_size[size] << endl;
+  }
+  cout << "Detailed MIP RMD times according to SIZE ID" << endl;
+  for(int sizeId=0; sizeId<3; sizeId++){
+    cout << "  SizeId" << sizeId << "  " << intraRmdMipTime_sizeId[sizeId] << endl;
+  }
+  
   cout << "---------------------------------------------------------------------" << endl;
 }
 
@@ -332,6 +350,184 @@ void storch::exportIntraReferences(Pel *buffer, CodingUnit cu, SamplesType type)
   fileHandler.close();
 }
 
+// Used to translate CU dimensions into enum or string
+CuSize storch::translateCuSize(int width, int height){
+    if(width==64 && height==64){
+        return _64x64;
+    }
+    else if(width==32 && height==32){
+        return _32x32;
+    }
+    else if(width==32 && height==16){
+        return _32x16;
+    }
+    else if(width==16 && height==32){
+        return _16x32;
+    }
+    else if(width==32 && height==8){
+        return _32x8;
+    }
+    else if(width==8 && height==32){
+        return _8x32;
+    }
+    else if(width==32 && height==4){
+        return _32x4;
+    }
+    else if(width==4 && height==32){
+        return _4x32;
+    }
+    else if(width==16 && height==16){
+        return _16x16;
+    }
+    else if(width==16 && height==8){
+        return _16x8;
+    }
+    else if(width==8 && height==16){
+        return _8x16;
+    }
+    else if(width==16 && height==4){
+        return _16x4;
+    }
+    else if(width==4 && height==16){
+        return _4x16;
+    }
+    else if(width==8 && height==8){
+        return _8x8;
+    }
+    else if(width==8 && height==4){
+        return _8x4;
+    }
+    else if(width==4 && height==8){
+        return _4x8;
+    }
+    else if(width==4 && height==4){
+        return _4x4;
+    }
+    else{
+        return OTHERS;
+    }
+}
+
+string storch::translateCuSize(int cuSize){
+    if(cuSize==_64x64){
+        return "64x64";
+    }
+    else if(cuSize==_32x32){
+        return "32x32";
+    }
+    else if(cuSize==_32x16){
+        return "32x16";
+    }
+    else if(cuSize==_16x32){
+        return "16x32";
+    }
+    else if(cuSize==_32x8){
+        return "32x8";
+    }
+    else if(cuSize==_8x32){
+        return "8x32";
+    }
+    else if(cuSize==_32x4){
+        return "32x4";
+    }
+    else if(cuSize==_4x32){
+        return "4x32";
+    }
+    else if(cuSize==_16x16){
+        return "16x16";
+    }
+    else if(cuSize==_16x8){
+        return "16x8";
+    }
+    else if(cuSize==_8x16){
+        return "8x16";
+    }
+    else if(cuSize==_16x4){
+        return "16x4";
+    }
+    else if(cuSize==_4x16){
+        return "4x16";
+    }
+    else if(cuSize==_8x8){
+        return "8x8";
+    }
+    else if(cuSize==_8x4){
+        return "8x4";
+    }
+    else if(cuSize==_4x8){
+        return "4x8";
+    }
+    else if(cuSize==_4x4){
+        return "4x4";
+    }
+    else if(cuSize==OTHERS){
+        return "OTHERS";
+    }
+    else{
+        return "ERROR";
+    }
+}
+
+int storch::getSizeId(CuSize cuSize){
+  if(cuSize==_64x64){
+        return 2;
+    }
+    else if(cuSize==_32x32){
+        return 2;
+    }
+    else if(cuSize==_32x16){
+        return 2;
+    }
+    else if(cuSize==_16x32){
+        return 2;
+    }
+    else if(cuSize==_32x8){
+        return 2;
+    }
+    else if(cuSize==_8x32){
+        return 2;
+    }
+    else if(cuSize==_32x4){
+        return 1;
+    }
+    else if(cuSize==_4x32){
+        return 1;
+    }
+    else if(cuSize==_16x16){
+        return 2;
+    }
+    else if(cuSize==_16x8){
+        return 2;
+    }
+    else if(cuSize==_8x16){
+        return 2;
+    }
+    else if(cuSize==_16x4){
+        return 1;
+    }
+    else if(cuSize==_4x16){
+        return 1;
+    }
+    else if(cuSize==_8x8){
+        return 1;
+    }
+    else if(cuSize==_8x4){
+        return 1;
+    }
+    else if(cuSize==_4x8){
+        return 1;
+    }
+    else if(cuSize==_4x4){
+        return 0;
+    }
+    else if(cuSize==OTHERS){
+        return -1;
+    }
+    else{
+        return -1;
+    }
+}
+
 // Used to track the execution time
 
 void storch::startIntraRmdPart1(){
@@ -356,9 +552,15 @@ void storch::startIntraRmdMip(){
   gettimeofday(&rmdMip1, NULL);
 }
 
-void storch::finishIntraRmdMip(){
+void storch::finishIntraRmdMip(int width, int height){
   gettimeofday(&rmdMip2, NULL);
   intraRmdMipTime += (double) (rmdMip2.tv_usec - rmdMip1.tv_usec)/1000000 + (double) (rmdMip2.tv_sec - rmdMip1.tv_sec);
+ 
+  CuSize cuSize = storch::translateCuSize(width, height);
+  intraRmdMipTime_size[cuSize] += (double) (rmdMip2.tv_usec - rmdMip1.tv_usec)/1000000 + (double) (rmdMip2.tv_sec - rmdMip1.tv_sec);
+  
+  int sizeId = storch::getSizeId(cuSize);
+  intraRmdMipTime_sizeId[sizeId] += (double) (rmdMip2.tv_usec - rmdMip1.tv_usec)/1000000 + (double) (rmdMip2.tv_sec - rmdMip1.tv_sec);
 }
 
 void storch::startIntraRmdGeneral(){

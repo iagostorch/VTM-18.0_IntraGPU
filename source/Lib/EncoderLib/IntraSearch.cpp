@@ -1336,7 +1336,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               }
             }
             // Probe MIP end
-            storch::finishIntraRmdMip();            
+            storch::finishIntraRmdMip(pu.lwidth(), pu.lheight());            
             
             if (sps.getUseMIP() && lfnstSaveFlag)
             {
