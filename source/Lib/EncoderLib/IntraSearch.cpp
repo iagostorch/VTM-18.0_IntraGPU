@@ -727,8 +727,20 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   // Proper size
   storch::targetBlock_multSizes &= (
                                       (cu.lwidth()==64 && cu.lheight()==64) ||
-                                      (cu.lwidth()==32 && cu.lheight()==32) ||
-                                      (cu.lwidth()==16 && cu.lheight()==16)
+                                                  (cu.lwidth()==32 && cu.lheight()==32) ||
+                                                  (cu.lwidth()==32 && cu.lheight()==16) ||
+                                                  (cu.lwidth()==16 && cu.lheight()==32) ||
+                      
+                      
+                                                  (cu.lwidth()==32 && cu.lheight()==8)  ||
+                                                  (cu.lwidth()==8 && cu.lheight()==32)  ||
+                                                                                                    
+                                            
+                                                  (cu.lwidth()==16 && cu.lheight()==16) ||
+                      
+                      
+                                                  (cu.lwidth()==16 && cu.lheight()==8)  ||
+                                                  (cu.lwidth()==8 && cu.lheight()==16)
           );
   // Proper alignment
   storch::targetBlock_multSizes &= (
@@ -1216,7 +1228,40 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               // Trace this CU position?
               target &= ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()));
               // Toggle the custom variable to trace other encoding stages accordingly
-              storch::targetBlock = target; 
+              
+              
+              
+              int target2 = 1;
+  
+              int ctuX, ctuY;
+              // Get coordinates of current CTU
+              ctuX = (cu.lx()>>7)<<7;
+              ctuY = (cu.ly()>>7)<<7;
+              //   Filter CUs for correct CTU, dimension and alignment
+              target2 &= ctuX==TRACE_predefinedX;
+              target2 &= ctuY==TRACE_predefinedY;
+              // Proper size
+              target2 &= (
+                                                  (cu.lwidth()==64 && cu.lheight()==64) ||
+                                                  (cu.lwidth()==32 && cu.lheight()==32) ||
+                                                  (cu.lwidth()==32 && cu.lheight()==16) ||
+                                                  (cu.lwidth()==16 && cu.lheight()==32) ||
+                      
+                      
+                                                  (cu.lwidth()==32 && cu.lheight()==8)  ||
+                                                  (cu.lwidth()==8 && cu.lheight()==32)  ||
+                                                                                                    
+                                            
+                                                  (cu.lwidth()==16 && cu.lheight()==16) ||
+                      
+                      
+                                                  (cu.lwidth()==16 && cu.lheight()==8)  ||
+                                                  (cu.lwidth()==8 && cu.lheight()==16)
+                      
+                      );
+              
+              
+              storch::targetBlock = target || (target2 && TRACE_multipleCusInCtu); 
 
               
               // At this point the reference samples are derived
@@ -1280,7 +1325,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 //                specificBlock |= (pu.lx()==1904 && pu.ly()==1056 && pu.lwidth()==16 && pu.lheight()==16);
                 
                 if((storch::targetBlock || storch::targetBlock_multSizes) && TRACE_innerResults) {
-                    distParamHad_4x4.extract_rd = 1;
+                    // distParamHad_4x4.extract_rd = 1;
                     printf("MIP SAD distortion PRE x2 SCALE %ld\n", distParamSad.distFunc(distParamSad));
                     printf("MIP,M=%d,SATD Distortion ORG %ld\n", mode, distParamHad.distFunc(distParamHad));
                     printf("MIP,M=%d,SATD Distortion 4x4 %ld\n\n", mode, distParamHad_4x4.distFunc(distParamHad_4x4));

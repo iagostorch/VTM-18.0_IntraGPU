@@ -310,9 +310,9 @@ void MatrixIntraPrediction::predictionUpsampling( int* const dst, const int* con
   
     if(TRACE_innerResults && storch::targetBlock){
       printf("    ## Prediction signal upsampled horizontal:\n");
-      for(int i=0; i<TRACE_predefinedWidth; i+=m_upsmpFactorHor){
-        for(int j=0; j<TRACE_predefinedHeight; j++){
-          printf("%d,", horDst[i*TRACE_predefinedWidth+j]);
+      for(int i=0; i<8*m_upsmpFactorVer; i+=m_upsmpFactorVer){
+        for(int j=0; j<8*m_upsmpFactorHor; j++){
+          printf("%d,", horDst[i*8*m_upsmpFactorHor+j]);
         }
         printf("\n");
       }
@@ -330,9 +330,9 @@ void MatrixIntraPrediction::predictionUpsampling( int* const dst, const int* con
                             1, m_upsmpFactorVer );
     if(TRACE_innerResults && storch::targetBlock){
       printf("    ## Prediction signal upsampled horizontal+vertical:\n");
-      for(int i=0; i<TRACE_predefinedWidth; i++){
-        for(int j=0; j<TRACE_predefinedHeight; j++){
-          printf("%d,", dst[i*TRACE_predefinedWidth+j]);
+      for(int i=0; i<8*m_upsmpFactorVer; i++){
+        for(int j=0; j<8*m_upsmpFactorHor; j++){
+          printf("%d,", dst[i*8*m_upsmpFactorHor+j]);
         }
         printf("\n");
       }
