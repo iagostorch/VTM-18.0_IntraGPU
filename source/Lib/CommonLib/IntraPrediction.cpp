@@ -1967,7 +1967,7 @@ void IntraPrediction::initIntraMip( const PredictionUnit &pu, const CompArea &ar
 void IntraPrediction::predIntraMip( const ComponentID compId, PelBuf &piPred, const PredictionUnit &pu )
 {
   if(storch::targetBlock_multSizes || 
-          (TRACE_estIntraPredLumaQT && TRACE_innerResults
+          (TRACE_estIntraPredLumaQT && (TRACE_innerResults || TRACE_boundaries || TRACE_predictionProgress || TRACE_distortion)
     && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
     && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly())))
   ){

@@ -725,53 +725,49 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   storch::targetBlock_multSizes &= ctuX==TRACE_predefinedX;
   storch::targetBlock_multSizes &= ctuY==TRACE_predefinedY;
   // Proper size
-  storch::targetBlock_multSizes &= (
-                                      (cu.lwidth()==64 && cu.lheight()==64) ||
-                                                  (cu.lwidth()==32 && cu.lheight()==32) ||
-                                                  (cu.lwidth()==32 && cu.lheight()==16) ||
-                                                  (cu.lwidth()==16 && cu.lheight()==32) ||
-                      
-                      
-                                                  (cu.lwidth()==32 && cu.lheight()==8)  ||
-                                                  (cu.lwidth()==8 && cu.lheight()==32)  ||
-                                                                                                    
-                                            
-                                                  (cu.lwidth()==16 && cu.lheight()==16) ||
-                      
-                      
-                                                  (cu.lwidth()==16 && cu.lheight()==8)  ||
-                                                  (cu.lwidth()==8 && cu.lheight()==16)
-          );
-  // Proper alignment
-  storch::targetBlock_multSizes &= (
-                                      (cu.lx()%cu.lwidth()==0) &&
-                                      (cu.ly()%cu.lheight()==0)
-          );
+  CuSize cuSize = storch::translateCuSize(cu.lwidth(), cu.lheight());
+  int cuSizeId = storch::getSizeId(cuSize);
   
-  int shouldTrace = TRACE_estIntraPredLumaQT;  
+  storch::targetBlock_multSizes &= cuSizeId==2;
+  
+  // Proper alignment
+//  storch::targetBlock_multSizes &= (
+//                                      (cu.lx()%cu.lwidth()==0) &&
+//                                      (cu.ly()%cu.lheight()==0)
+//          );
+  
+  int shouldTrace = (TRACE_estIntraPredLumaQT || EXTRACT_distortion);  
+  
   shouldTrace &=   ( storch::targetBlock_multSizes ||
                       (     ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
                          && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
                       )
                     );
   
-  if( shouldTrace ){
-    printf("\nestIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
+  shouldTrace &= cuSizeId==2;
   
-    PartitioningStack z = partitioner.getPartStack();
+  if( shouldTrace ){
+    if(TRACE_estIntraPredLumaQT){
+      printf("estIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
+  
+      PartitioningStack z = partitioner.getPartStack();
 
-    // Print the sequence of splits (QT, TH, TV, BH, BV) that led to the current CU
-    for(int i=0; i<z.size(); i++){
-      PartLevel part = z.at(i);
-      translatePartSplit(part);
+      // Print the sequence of splits (QT, TH, TV, BH, BV) that led to the current CU
+      for(int i=0; i<z.size(); i++){
+        PartLevel part = z.at(i);
+        translatePartSplit(part);
+      }
+      printf("|||");
+
+  //    std::cout << partitioner.getSplitSeries();
+  //    
+  //    printf("|||");
+
+      printf("MTS=%d, testISP=%d,saveDataForISP=%d,lfnstSaveFlag=%d,lfnstLoadFlag=%d\n", mtsUsageFlag, testISP, saveDataForISP, lfnstSaveFlag, lfnstLoadFlag);
     }
-    printf("|||");
-
-//    std::cout << partitioner.getSplitSeries();
-//    
-//    printf("|||");
     
-    printf("MTS=%d, testISP=%d,saveDataForISP=%d,lfnstSaveFlag=%d,lfnstLoadFlag=%d\n", mtsUsageFlag, testISP, saveDataForISP, lfnstSaveFlag, lfnstLoadFlag);
+
+    
   }
   
   
@@ -1324,13 +1320,25 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 //                specificBlock |= (pu.lx()==224 && pu.ly()==224 && pu.lwidth()==16 && pu.lheight()==16); 
 //                specificBlock |= (pu.lx()==1904 && pu.ly()==1056 && pu.lwidth()==16 && pu.lheight()==16);
                 
-                if((storch::targetBlock || storch::targetBlock_multSizes) && TRACE_innerResults) {
+                if((storch::targetBlock || storch::targetBlock_multSizes) && TRACE_distortion) {
                     // distParamHad_4x4.extract_rd = 1;
                     printf("MIP SAD distortion PRE x2 SCALE %ld\n", distParamSad.distFunc(distParamSad));
-                    printf("MIP,M=%d,SATD Distortion ORG %ld\n", mode, distParamHad.distFunc(distParamHad));
-                    printf("MIP,M=%d,SATD Distortion 4x4 %ld\n\n", mode, distParamHad_4x4.distFunc(distParamHad_4x4));
+                    printf("MIP,M=%d,SATD Distortion ORG %ld\n", modeFull, distParamHad.distFunc(distParamHad));
+                    printf("MIP,M=%d,SATD Distortion 4x4 %ld\n\n", modeFull, distParamHad_4x4.distFunc(distParamHad_4x4));
                 }
                  
+                
+                if(EXTRACT_distortion && cuSizeId==2){
+                  int ctuIdx = 0;
+                  // Y component
+                  ctuIdx = (cu.ly()/128)  * cs.pps->getPicWidthInCtu();
+                  // X component
+                  ctuIdx += cu.lx()/128;
+                          
+                  storch::mip_file << cs.picture->poc << "," << ctuIdx << "," << storch::translateCuSize(storch::translateCuSize(cs.area.lwidth(), cs.area.lheight())) << "," << cs.area.lwidth() << "," << cs.area.lheight() << "," << cs.area.lx() << "," << cs.area.ly() << ",";
+                  storch::mip_file << modeFull << "," << distParamSad.distFunc(distParamSad) << "," << distParamHad_4x4.distFunc(distParamHad_4x4) << "," << distParamHad.distFunc(distParamHad) << endl;
+                }        
+                
                 distParamHad_4x4.extract_rd = 0;
                   
                 m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);

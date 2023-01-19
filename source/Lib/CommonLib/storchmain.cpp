@@ -19,6 +19,8 @@ int storch::extractedFrames[EXT_NUM][500];
 int storch::targetBlock;
 int storch::targetBlock_multSizes;
 int storch::target_availability;
+std::ofstream storch::mip_file;
+
 
 struct timeval storch::rmdGen1, storch::rmdGen2, storch::rmdHevc1, storch::rmdHevc2, storch::rmdVvc1, storch::rmdVvc2, storch::rmdMrl1, storch::rmdMrl2, storch::rmdMip1, storch::rmdMip2, storch::rdoGen1, storch::rdoGen2, storch::rdoIsp1, storch::rdoIsp2; 
 double storch::intraRmdGenTime, storch::intraRmd1Time, storch::intraRmd2Time, storch::intraRmdMrlTime, storch::intraRmdMipTime, storch::intraRdoGenTime, storch::intraRdoIspTime;
@@ -59,6 +61,13 @@ storch::storch() {
   
   previousPic = Picture();
   recoBuf = PelStorage();
+  
+  if(EXTRACT_distortion){     
+      string mipFileName = (string) "mip_costs.csv";
+      mip_file.open(mipFileName);
+      
+      mip_file << "POC,CTU,sizeName,W,H,X,Y,Mode,SAD_PRE_2x,SATD_GPU,SATD_ORIG" << endl;
+  }
 }
 
 void storch::finishEncoding(){
