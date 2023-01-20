@@ -875,11 +875,11 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
           //===== init pattern for luma prediction =====
          
-          // Fetch the reference samples that will be used for reduced angular intra pred (modes from HEVC)
-          if(TEMPORAL_INTRA){
+          // Fetch the reference samples that will be used for reduced and expanded angular intra pred (modes from HEVC and then new ones from VVC)
+          if(ALTERNATIVE_REF_ANGULAR && TEMPORAL_INTRA){
             initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
           }
-          else if(ORIG_SAMPLES_INTRA){
+          else if(ALTERNATIVE_REF_ANGULAR && ORIG_SAMPLES_INTRA){
             initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
           }
           else{
@@ -1084,11 +1084,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
               pu.multiRefIdx = multiRefIdx;
               {
+                
                 // Fetch reference samples again. Now they are used for MRL
-                if(TEMPORAL_INTRA){
+                if(ALTERNATIVE_REF_MRL && TEMPORAL_INTRA){
                   initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
                 }
-                else if(ORIG_SAMPLES_INTRA){
+                else if(ALTERNATIVE_REF_MRL && ORIG_SAMPLES_INTRA){
                   initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
                 }
                 else{
@@ -1261,11 +1262,11 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
               
               // At this point the reference samples are derived
-               // Fetch the reference samples that will be used in MIP
-              if(TEMPORAL_INTRA){
+              // Fetch the reference samples that will be used in MIP
+              if(ALTERNATIVE_REF_MIP && TEMPORAL_INTRA){
                 initIntraPatternChType(cu, pu.Y(), PREV_REC);
               } 
-              else if(ORIG_SAMPLES_INTRA){
+              else if(ALTERNATIVE_REF_MIP && ORIG_SAMPLES_INTRA){
                 initIntraPatternChType(cu, pu.Y(), CURR_ORIG);
               }
               else{

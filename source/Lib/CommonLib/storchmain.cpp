@@ -71,10 +71,21 @@ storch::storch() {
 }
 
 void storch::finishEncoding(){
-  printf("Finished the encoding\n");
+  printf("\n\n");
+  printf("-=-=-=-=-=  MACROS  =-=-=-=-=-  \n");
+  printf("SIMD_ENABLE:              %d\n", SIMD_ENABLE);
+  printf("GPU_MIP:                  %d\n", GPU_MIP);
+  printf("ENABLE_SPLIT_HEURISTICS:  %d\n", ENABLE_SPLIT_HEURISTICS);
+  printf("TEMPORAL_INTRA:           %d\n", TEMPORAL_INTRA);
+  printf("ORIG_SAMPLES_INTRA:       %d\n", ORIG_SAMPLES_INTRA);
+  printf("ALTERNATIVE_REF_ANGULAR:  %d\n", ALTERNATIVE_REF_ANGULAR);
+  printf("ALTERNATIVE_REF_MRL:      %d\n", ALTERNATIVE_REF_MRL);
+  printf("ALTERNATIVE_REF_MIP:      %d\n", ALTERNATIVE_REF_MIP);
+  printf("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n");
   
-  cout << "###      Intraframe prediction time:" << endl;
-
+          
+  printf("-=-=-=-=-=  TIMES  =-=-=-=-=-  \n");
+  
   cout << "General RMD:  " << (intraRmdGenTime) << endl;
   cout << "  RMD Part 1            " << intraRmd1Time << endl;
   cout << "  RMD Part 2            " << intraRmd2Time << endl;
@@ -95,7 +106,7 @@ void storch::finishEncoding(){
     cout << "  SizeId" << sizeId << "  " << intraRmdMipTime_sizeId[sizeId] << endl;
   }
   
-  cout << "---------------------------------------------------------------------" << endl;
+  printf("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n");
 }
 
 // Export the samples of a PU into a CSV file
