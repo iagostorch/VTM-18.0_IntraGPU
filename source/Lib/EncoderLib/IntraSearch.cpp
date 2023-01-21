@@ -715,38 +715,20 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   const bool isEncodeGdrClean = cs.sps->getGDREnabledFlag() && cs.pcv->isEncoder && cs.picHeader->getInGdrInterval() && cs.isClean(pu.Y().topRight(), CHANNEL_TYPE_LUMA);
 #endif
   
-  storch::targetBlock_multSizes = TRACE_multipleCusInCtu;
-  
-  int ctuX, ctuY;
   // Get coordinates of current CTU
+  int ctuX, ctuY;
   ctuX = (cu.lx()>>7)<<7;
   ctuY = (cu.ly()>>7)<<7;
-  //   Filter CUs for correct CTU, dimension and alignment
-  storch::targetBlock_multSizes &= ctuX==TRACE_predefinedX;
-  storch::targetBlock_multSizes &= ctuY==TRACE_predefinedY;
+  
   // Proper size
   CuSize cuSize = storch::translateCuSize(cu.lwidth(), cu.lheight());
   int cuSizeId = storch::getSizeId(cuSize);
   
-  storch::targetBlock_multSizes &= cuSizeId==2;
+  int traceCall = TRACE_estIntraPredLumaQT;
+  traceCall &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
+  traceCall &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));
   
-  // Proper alignment
-//  storch::targetBlock_multSizes &= (
-//                                      (cu.lx()%cu.lwidth()==0) &&
-//                                      (cu.ly()%cu.lheight()==0)
-//          );
-  
-  int shouldTrace = (TRACE_estIntraPredLumaQT || EXTRACT_distortion);  
-  
-  shouldTrace &=   ( storch::targetBlock_multSizes ||
-                      (     ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-                         && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-                      )
-                    );
-  
-  shouldTrace &= cuSizeId==2;
-  
-  if( shouldTrace ){
+  if( traceCall ){
     if(TRACE_estIntraPredLumaQT){
       printf("estIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
   
@@ -765,9 +747,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
       printf("MTS=%d, testISP=%d,saveDataForISP=%d,lfnstSaveFlag=%d,lfnstLoadFlag=%d\n", mtsUsageFlag, testISP, saveDataForISP, lfnstSaveFlag, lfnstLoadFlag);
     }
-    
-
-    
   }
   
   
@@ -1181,14 +1160,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             
             //*** Derive MIP candidates using Hadamard
             if (testMip && !supportedMipBlkSize)
-            {
-              if(TRACE_estIntraPredLumaQT && TRACE_innerResults
-                && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-                && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-              ){
-                printf("..Going into unsupported RMD MIP\n");
-              }
-              
+            {             
               // avoid estimation for unsupported blk sizes
               const int transpOff    = getNumModesMip(pu.Y());
               const int numModesFull = (transpOff << 1);
@@ -1204,61 +1176,27 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             }
             else if (testMip)
             {
-              
-              if(TRACE_estIntraPredLumaQT && TRACE_innerResults
-                && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-                && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-              ){
-                printf(".. >> Going into supported RMD MIP. %d modes FULL\n", getNumModesMip(pu.Y())<<1);
-              }
               cu.mipFlag     = true;
               pu.multiRefIdx = 0;
 
               double mipHadCost[MAX_NUM_MIP_MODE] = { MAX_DOUBLE };
 
               
-              // Target at one specific CU to extract the predicted samples during MIP
-              int target = 1;
-              
-              // Trace this CU size?
-              target &= ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) );
-              // Trace this CU position?
-              target &= ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()));
-              // Toggle the custom variable to trace other encoding stages accordingly
-              
-              
-              
-              int target2 = 1;
-  
+              // Extract the predicted samples during MIP
               int ctuX, ctuY;
               // Get coordinates of current CTU
               ctuX = (cu.lx()>>7)<<7;
-              ctuY = (cu.ly()>>7)<<7;
-              //   Filter CUs for correct CTU, dimension and alignment
-              target2 &= ctuX==TRACE_predefinedX;
-              target2 &= ctuY==TRACE_predefinedY;
+              ctuY = (cu.ly()>>7)<<7;  
               // Proper size
-              target2 &= (
-                                                  (cu.lwidth()==64 && cu.lheight()==64) ||
-                                                  (cu.lwidth()==32 && cu.lheight()==32) ||
-                                                  (cu.lwidth()==32 && cu.lheight()==16) ||
-                                                  (cu.lwidth()==16 && cu.lheight()==32) ||
-                      
-                      
-                                                  (cu.lwidth()==32 && cu.lheight()==8)  ||
-                                                  (cu.lwidth()==8 && cu.lheight()==32)  ||
-                                                                                                    
-                                            
-                                                  (cu.lwidth()==16 && cu.lheight()==16) ||
-                      
-                      
-                                                  (cu.lwidth()==16 && cu.lheight()==8)  ||
-                                                  (cu.lwidth()==8 && cu.lheight()==16)
-                      
-                      );
+              CuSize cuSize = storch::translateCuSize(cu.lwidth(), cu.lheight());
+              int cuSizeId = storch::getSizeId(cuSize);
               
-              
-              storch::targetBlock = target || (target2 && TRACE_multipleCusInCtu); 
+              // Verify if current block is eligible for tracing (size and position)
+              int traceBlock = 1;
+              traceBlock &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
+              traceBlock &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));             
+
+              storch::targetBlock = traceBlock;
 
               
               // At this point the reference samples are derived
@@ -1278,7 +1216,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               const int transpOff    = getNumModesMip(pu.Y());
               const int numModesFull = (transpOff << 1);
               
-              if(EXTRACT_blockData && target){
+              if(EXTRACT_blockData && traceBlock){
                 storch::exportSamplesBlock_v2(pu.cu->cs->getOrgBuf(COMPONENT_Y), EXT_ORIGINAL, pu.lx(), pu.ly());
               }
                       
@@ -1293,7 +1231,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 
 
                 
-                if(EXTRACT_blockData && target){
+                if(EXTRACT_blockData && traceBlock){
                   string suffix = (string) (isTransposed ? "T1" : "T0");
                   suffix += "_mode" + std::to_string(mode);
                   
@@ -1312,16 +1250,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                   minSadHad = std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
                 }
                   
-                
-                // Select set of specific blocks to avoid modifying header files when debugging
-//                int specificBlock = 0;
-//                specificBlock |= (pu.lx()==192 && pu.ly()==192 && pu.lwidth()==64 && pu.lheight()==64);
-//                specificBlock |= (pu.lx()==240 && pu.ly()==240 && pu.lwidth()==16 && pu.lheight()==16);
-//                specificBlock |= (pu.lx()==224 && pu.ly()==224 && pu.lwidth()==32 && pu.lheight()==32);
-//                specificBlock |= (pu.lx()==224 && pu.ly()==224 && pu.lwidth()==16 && pu.lheight()==16); 
-//                specificBlock |= (pu.lx()==1904 && pu.ly()==1056 && pu.lwidth()==16 && pu.lheight()==16);
-                
-                if((storch::targetBlock || storch::targetBlock_multSizes) && TRACE_distortion) {
+                if(storch::targetBlock && TRACE_distortion) {
                     // distParamHad_4x4.extract_rd = 1;
                     printf("MIP SAD distortion PRE x2 SCALE %ld\n", distParamSad.distFunc(distParamSad));
                     printf("MIP,M=%d,SATD Distortion ORG %ld\n", modeFull, distParamHad.distFunc(distParamHad));
@@ -1329,7 +1258,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 }
                  
                 
-                if(EXTRACT_distortion && cuSizeId==2){
+                if(EXTRACT_distortion && storch::targetBlock){
                   int ctuIdx = 0;
                   // Y component
                   ctuIdx = (cu.ly()/128)  * cs.pps->getPicWidthInCtu();
@@ -1380,14 +1309,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               const double thresholdHadCost = 1.0 + 1.4 / sqrt((double) (pu.lwidth() * pu.lheight()));
               reduceHadCandList(rdModeList, candCostList, numModesForFullRD, thresholdHadCost, mipHadCost, pu, fastMip);
               
-              if(TRACE_estIntraPredLumaQT && TRACE_innerResults
-                && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
-                && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
-              ){
-                printf(".. << Leaving supported RMD MIP. %d modes FULL\n", numModesFull);
-                // Disable trace after RMD
-                storch::targetBlock = 0;
-              }
+              // Disable trace after RMD
+              storch::targetBlock = 0;
             }
             // Probe MIP end
             storch::finishIntraRmdMip(pu.lwidth(), pu.lheight());            
@@ -1659,10 +1582,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
     }
     int bestLfnstIdx = cu.lfnstIdx;
 
-    if(TRACE_estIntraPredLumaQT && TRACE_innerResults
-      && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
-      && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
-    ){
+    if((TRACE_boundaries || TRACE_predictionProgress || TRACE_distortion) && storch::targetBlock){
       printf(".. >> Going into RDO with %d MODES\n", (int) rdModeList.size());
     }
     
@@ -1900,12 +1820,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       {
         CHECK(pu.intraDir[CHANNEL_TYPE_CHROMA] != DM_CHROMA_IDX, "chroma should use DM mode for adaptive color transform");
       }
-    }
-    if(TRACE_estIntraPredLumaQT && TRACE_innerResults
-      && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
-      && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly()))
-    ){
-      printf(".. << Leaving RDO with %d MODES\n", (int) rdModeList.size());
     }
   }
 

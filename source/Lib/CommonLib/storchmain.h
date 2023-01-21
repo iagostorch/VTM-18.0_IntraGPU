@@ -25,30 +25,13 @@
 
 // My directives
 
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+//
+//         MACROS THAT INTERFERE ON THE ENCODING DECISIONS
+//
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 #define GPU_MIP 0                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
-
-#define TRACE_neighborAvailability 0
-#define TRACE_estIntraPredLumaQT 0      // Print the data in each call of estIntraPredLumaQT()
-#define TRACE_multipleCusInCtu 0        // When enabled, trace multiple CU sizes inside the same CTU. The CTU position is defined by the predefined X and Y positions
-//     IMPORTANT                        // When multipleCusInCtu is enabled, predefinedSize must be enabled with a wrong predefinedWidth and height
-#define TRACE_predefinedSize 1          // Only trace a predefined size of CU
-#define TRACE_predefinedWidth 32
-#define TRACE_predefinedHeight 32
-#define TRACE_predefinedPosition 1      // Only trace CUs in a predefined position
-#define TRACE_predefinedX 128
-#define TRACE_predefinedY 128
-#define TRACE_innerResults 1            // Trace some inner results of the prediction, such as reduced boundaries, subsampled and complete prediction signal for MIP
-#define TRACE_fineGrainedNeighborAvailability 0  // Fine-grained details of what neighboring units are available for intra references
-
-#define TRACE_boundaries 0      // Complete and reduced boundaries
-#define TRACE_predictionProgress 0 // Reduced, horizontal and vertical upsample prediction
-#define TRACE_distortion 0  // SAD and SATD distortion
-
-#define EXTRACT_distortion 0
-
-
-#define EXTRACT_blockData 0
-#define EXTRACT_frames 0                // Extract the original, true original, predicted and reconstructed frame
 
 #define ENABLE_SPLIT_HEURISTICS 1
 
@@ -60,6 +43,30 @@
 #define ALTERNATIVE_REF_ANGULAR 0
 #define ALTERNATIVE_REF_MRL 0
 #define ALTERNATIVE_REF_MIP 0
+
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+//
+//         MACROS USED FOR DEBUGGING OR TRACING
+//
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+#define TRACE_singleSizeId 1
+#define TRACE_targetSizeId 2
+
+#define TRACE_singleCTU 1
+#define TRACE_targetCtuX 128
+#define TRACE_targetCtuY 128
+
+#define TRACE_estIntraPredLumaQT 1      // Print the data in each call of estIntraPredLumaQT()
+#define TRACE_boundaries 1      // Complete and reduced boundaries
+#define TRACE_predictionProgress 1 // Reduced, horizontal and vertical upsample prediction
+#define TRACE_distortion 0  // SAD and SATD distortion
+#define TRACE_fineGrainedNeighborAvailability 0  // Fine-grained details of what neighboring units are available for intra references
+
+#define EXTRACT_blockData 0             // Extract block data is NOT FUNCTIONING anymore
+#define EXTRACT_frames 0                // Extract the original, true original, predicted and reconstructed frame
+#define EXTRACT_distortion 0
 
 using namespace std;
 

@@ -83,13 +83,13 @@ void MatrixIntraPrediction::prepareInputForPred(const CPelBuf &pSrc, const Area 
 
   if(storch::targetBlock && TRACE_boundaries){
     printf("Complete TOP BOUNDARY\n");
-    for(int i=0; i<64; i++){
+    for(int i=0; i<block.width; i++){
       printf("%d,", m_refSamplesTop[i]);
     }
     printf("\n");
     
     printf("Complete LEFT BOUNDARY\n");
-    for(int i=0; i<64; i++){
+    for(int i=0; i<block.height; i++){
       printf("%d,", m_refSamplesLeft[i]);
     }
     printf("\n");
@@ -117,6 +117,18 @@ void MatrixIntraPrediction::prepareInputForPred(const CPelBuf &pSrc, const Area 
     leftReducedTransposed[y] = leftReduced[y];
   }
 
+  if(storch::targetBlock && TRACE_boundaries){
+    printf("\n");
+    printf("    ## Reduced TOP & LEFT boundaries:\n");
+    for(int i=0; i<m_reducedBdrySize; i++)
+      printf("%d,", topReduced[i]);
+    printf(" ||| ");
+    for(int i=0; i<m_reducedBdrySize; i++)
+      printf("%d,", leftReduced[i] );
+      
+    printf("\n");
+  }
+  
   // Step 4: Rebase the reduced boundary
 
   m_inputOffset       = m_reducedBoundary[0];
@@ -147,14 +159,14 @@ void MatrixIntraPrediction::predBlock(int *const result, const int modeIdx, cons
   const int* const reducedBoundary = transpose ? m_reducedBoundaryTransposed.data() : m_reducedBoundary.data();
   computeReducedPred(reducedPred, reducedBoundary, matrix, transpose, bitDepth);
   
-  if((TRACE_innerResults || TRACE_boundaries || TRACE_predictionProgress) && (storch::targetBlock || storch::targetBlock_multSizes)){
+  if((TRACE_boundaries || TRACE_predictionProgress) && TRACE_estIntraPredLumaQT && storch::targetBlock){
     
     // printf(" ## INSIDE PREDICTION OF REDUCED BLOCK...............\n");
     
     if(TRACE_boundaries){
       printf("\n");
       printf("    ## Reduced boundary:\n");
-      for(int i=0; i<8; i++)
+      for(int i=0; i<m_reducedBdrySize*2; i++)
         printf("%d,", transpose ? m_reducedBoundaryTransposed.at(i) : m_reducedBoundary.at(i));
         //      printf("%d,", reducedBoundary[i]);
       printf("\n");
@@ -163,26 +175,24 @@ void MatrixIntraPrediction::predBlock(int *const result, const int modeIdx, cons
     if(TRACE_predictionProgress){
       printf("\n");
       printf("    ## Reduced prediction signal:\n");
-      for(int i=0; i<8; i++){
-        for(int j=0; j<8; j++){
-          printf("%d,", reducedPred[i*8+j]);
+      for(int i=0; i<m_reducedPredSize; i++){
+        for(int j=0; j<m_reducedPredSize; j++){
+          printf("%d,", reducedPred[i*m_reducedPredSize+j]);
         }
         printf("\n");
       }
     }
-    
-    
   }
   
   if( needUpsampling )
   {
     predictionUpsampling( result, reducedPred );
-    if(0 && TRACE_innerResults && (storch::targetBlock || storch::targetBlock_multSizes)){
+    if(0 && TRACE_predictionProgress && storch::targetBlock){
       printf("\n");
       printf("    ## Prediction signal after upsampling:\n");
-      for(int i=0; i<TRACE_predefinedWidth; i++){
-        for(int j=0; j<TRACE_predefinedHeight; j++){
-          printf("%d,", result[i*TRACE_predefinedWidth + j]);
+      for(int i=0; i<m_reducedPredSize*m_upsmpFactorVer; i++){
+        for(int j=0; j<m_reducedPredSize*m_upsmpFactorHor; j++){
+          printf("%d,", result[i*m_reducedPredSize*m_upsmpFactorHor + j]);
         }
         printf("\n");
       } 
@@ -319,9 +329,9 @@ void MatrixIntraPrediction::predictionUpsampling( int* const dst, const int* con
   
     if(TRACE_predictionProgress && storch::targetBlock){
       printf("    ## Prediction signal upsampled horizontal:\n");
-      for(int i=0; i<8*m_upsmpFactorVer; i+=m_upsmpFactorVer){
-        for(int j=0; j<8*m_upsmpFactorHor; j++){
-          printf("%d,", horDst[i*8*m_upsmpFactorHor+j]);
+      for(int i=0; i<m_reducedPredSize*m_upsmpFactorVer; i+=m_upsmpFactorVer){
+        for(int j=0; j<m_reducedPredSize*m_upsmpFactorHor; j++){
+          printf("%d,", horDst[i*m_reducedPredSize*m_upsmpFactorHor+j]);
         }
         printf("\n");
       }
@@ -339,9 +349,9 @@ void MatrixIntraPrediction::predictionUpsampling( int* const dst, const int* con
                             1, m_upsmpFactorVer );
     if(TRACE_predictionProgress && storch::targetBlock){
       printf("    ## Prediction signal upsampled horizontal+vertical:\n");
-      for(int i=0; i<8*m_upsmpFactorVer; i++){
-        for(int j=0; j<8*m_upsmpFactorHor; j++){
-          printf("%d,", dst[i*8*m_upsmpFactorHor+j]);
+      for(int i=0; i<m_reducedPredSize*m_upsmpFactorVer; i++){
+        for(int j=0; j<m_reducedPredSize*m_upsmpFactorHor; j++){
+          printf("%d,", dst[i*m_reducedPredSize*m_upsmpFactorHor+j]);
         }
         printf("\n");
       }

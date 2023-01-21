@@ -814,20 +814,14 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   }
   
   
-  if(TRACE_estIntraPredLumaQT && TRACE_innerResults && EXTRACT_blockData
-          && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-          && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-    ){
+  if(storch::targetBlock && EXTRACT_blockData){
         storch::exportIntraReferences(refBufUnfiltered, cu, INTRA_REF_UNFILTERED);
   }
   // ----- Step 2: filtered reference samples -----
   if( m_ipaParam.refFilterFlag || forceRefFilterFlag )
   {
     xFilterReferenceSamples( refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.firstPU->multiRefIdx );
-    if(TRACE_estIntraPredLumaQT && TRACE_innerResults && EXTRACT_blockData
-          && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-          && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-    ){
+    if(storch::targetBlock && EXTRACT_blockData){
       storch::exportIntraReferences(refBufFiltered, cu, INTRA_REF_FILTERED);
     }
   }
@@ -1007,12 +1001,9 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
   
   
   
-  if(TRACE_estIntraPredLumaQT && TRACE_innerResults
-    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==cu.lwidth() && TRACE_predefinedHeight==cu.lheight()) )
-    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==cu.lx() && TRACE_predefinedY==cu.ly()))
-  ){
-    storch::targetBlock = 1;
-    storch::target_availability = TRACE_fineGrainedNeighborAvailability && 1;
+  if(TRACE_estIntraPredLumaQT && TRACE_fineGrainedNeighborAvailability && storch::targetBlock)
+  {
+    storch::target_availability = 1;
     if (storch::target_availability)
       printf("[!!!] SET AVAILABILITY\n");
     
@@ -1966,12 +1957,9 @@ void IntraPrediction::initIntraMip( const PredictionUnit &pu, const CompArea &ar
 
 void IntraPrediction::predIntraMip( const ComponentID compId, PelBuf &piPred, const PredictionUnit &pu )
 {
-  if(storch::targetBlock_multSizes || 
-          (TRACE_estIntraPredLumaQT && (TRACE_innerResults || TRACE_boundaries || TRACE_predictionProgress || TRACE_distortion)
-    && ( !TRACE_predefinedSize     || (   TRACE_predefinedSize     && TRACE_predefinedWidth==pu.lwidth() && TRACE_predefinedHeight==pu.lheight()) )
-    && ( !TRACE_predefinedPosition || (   TRACE_predefinedPosition && TRACE_predefinedX==pu.lx() && TRACE_predefinedY==pu.ly())))
-  ){
-    printf(".... Doing MIP prediction. Mode %d %s\n", pu.intraDir[CHANNEL_TYPE_LUMA], pu.mipTransposedFlag ? "TRANSP" : "NOT TRAN");
+  if(storch::targetBlock && TRACE_estIntraPredLumaQT && (TRACE_boundaries || TRACE_predictionProgress || TRACE_distortion))        
+  {
+    printf("\n.... Doing MIP prediction. Mode %d %s\n", pu.intraDir[CHANNEL_TYPE_LUMA], pu.mipTransposedFlag ? "TRANSP" : "NOT TRAN");
   }
   
   CHECK( piPred.width > MIP_MAX_WIDTH || piPred.height > MIP_MAX_HEIGHT, "Error: block size not supported for MIP" );
