@@ -38,6 +38,7 @@
 #include "CommonLib/BitStream.h"
 #include "CommonLib/dtrace_next.h"
 
+#include "CommonLib/storchmain.h"
 
 
 class BinStore
@@ -245,7 +246,7 @@ public:
   unsigned  getNumBins          ( unsigned ctxId )              const { THROW( "not supported for BitEstimator" ); return 0; }
 public:
   void      encodeBinEP         ( unsigned bin                      ) { m_EstFracBits += BinProbModelBase::estFracBitsEP (); }
-  void      encodeBinsEP        ( unsigned bins,  unsigned numBins  ) { m_EstFracBits += BinProbModelBase::estFracBitsEP ( numBins ); }
+  void      encodeBinsEP        ( unsigned bins,  unsigned numBins  ) { m_EstFracBits += BinProbModelBase::estFracBitsEP ( numBins ); storch::bitsMip=BinProbModelBase::estFracBitsEP ( numBins ); }
   void      encodeRemAbsEP      ( unsigned bins,
                                   unsigned goRicePar,
                                   unsigned cutoff,

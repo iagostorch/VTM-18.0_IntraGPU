@@ -19,7 +19,15 @@ int storch::extractedFrames[EXT_NUM][500];
 int storch::targetBlock;
 int storch::targetBlock_multSizes;
 int storch::target_availability;
+int storch::traceCall;
+int storch::bitsMip;
 std::ofstream storch::mip_file;
+
+
+
+struct timeval storch::probeBitrateRmdMip1, storch::probeBitrateRmdMip2;
+double storch::timeBitrateRmdMip;
+double storch::countBitrateRmdMip;
 
 
 struct timeval storch::rmdGen1, storch::rmdGen2, storch::rmdHevc1, storch::rmdHevc2, storch::rmdVvc1, storch::rmdVvc2, storch::rmdMrl1, storch::rmdMrl2, storch::rmdMip1, storch::rmdMip2, storch::rdoGen1, storch::rdoGen2, storch::rdoIsp1, storch::rdoIsp2; 
@@ -42,6 +50,13 @@ storch::storch() {
   targetBlock=0;
   targetBlock_multSizes=0;
   target_availability=0;
+  traceCall = 0;
+  bitsMip = 0;
+  
+  
+  timeBitrateRmdMip = 0.0;
+  countBitrateRmdMip = 0;
+  
   
   intraRmdGenTime = 0.0;
   intraRmd1Time = 0.0;
@@ -66,7 +81,7 @@ storch::storch() {
       string mipFileName = (string) "mip_costs.csv";
       mip_file.open(mipFileName);
       
-      mip_file << "POC,CTU,sizeName,W,H,X,Y,Mode,SAD_PRE_2x,SATD_GPU,SATD_ORIG" << endl;
+      mip_file << "POC,CTU,sizeName,W,H,X,Y,Mode,SAD_PRE_2x,SATD_GPU,SATD_ORIG,minSadHad,bitsMip" << endl;
   }
 }
 
@@ -91,7 +106,10 @@ void storch::finishEncoding(){
   cout << "  RMD Part 2            " << intraRmd2Time << endl;
   cout << "  RMD MRL               " << intraRmdMrlTime << endl;
   cout << "  RMD MIP               " << intraRmdMipTime << endl;
+  cout << "    NumCalls BitrateMIP " << countBitrateRmdMip << endl;
+  cout << "    Time BitrateMIP     " << timeBitrateRmdMip << endl;
   cout << "  RMD Others            " << intraRmdGenTime - (intraRmd1Time+intraRmd2Time+intraRmdMrlTime+intraRmdMipTime)<< endl;
+  
 
   cout << "General RDO:            " << intraRdoGenTime << endl;
   cout << "  RDO ISPs              " << intraRdoIspTime << endl;
@@ -682,4 +700,16 @@ void storch::printRecBuf(){
     }
     printf("---------------------------\n");  
 }
+
+void storch::startBitrateRmdMip(){
+  gettimeofday(&probeBitrateRmdMip1 , NULL);
+}
+
+void storch::finishBitrateRmdMip(){
+  gettimeofday(&probeBitrateRmdMip2, NULL);
+  timeBitrateRmdMip += (double) (probeBitrateRmdMip2.tv_usec - probeBitrateRmdMip1.tv_usec)/1000000 + (double) (probeBitrateRmdMip2.tv_sec - probeBitrateRmdMip1.tv_sec);
+  countBitrateRmdMip += 1;
+}
+
+
 

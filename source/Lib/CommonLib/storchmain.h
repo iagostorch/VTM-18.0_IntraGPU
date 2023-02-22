@@ -31,18 +31,18 @@
 //
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#define GPU_MIP 0                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
+#define GPU_MIP 1                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
 
-#define ENABLE_SPLIT_HEURISTICS 1
+#define ENABLE_SPLIT_HEURISTICS 0
 
 // When both are disabled we conduct the vanilla intra prediction, with predicted samples from the same frame
 #define TEMPORAL_INTRA 0 // When enabled, the references for intra predictin are fetched from the previous reconstructed frame
-#define ORIG_SAMPLES_INTRA 0 // When enabled, the references for intra predictin are the original samples of the current frame
+#define ORIG_SAMPLES_INTRA 1 // When enabled, the references for intra predictin are the original samples of the current frame
 
 // Defines on what encoding stage the alternative references (temporal or orig) will be used
 #define ALTERNATIVE_REF_ANGULAR 0
 #define ALTERNATIVE_REF_MRL 0
-#define ALTERNATIVE_REF_MIP 0
+#define ALTERNATIVE_REF_MIP 1
 
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -51,16 +51,16 @@
 //
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#define TRACE_singleSizeId 1
+#define TRACE_singleSizeId 0
 #define TRACE_targetSizeId 2
 
 #define TRACE_singleCTU 1
 #define TRACE_targetCtuX 128
 #define TRACE_targetCtuY 128
 
-#define TRACE_estIntraPredLumaQT 1      // Print the data in each call of estIntraPredLumaQT()
-#define TRACE_boundaries 1      // Complete and reduced boundaries
-#define TRACE_predictionProgress 1 // Reduced, horizontal and vertical upsample prediction
+#define TRACE_estIntraPredLumaQT 0      // Print the data in each call of estIntraPredLumaQT()
+#define TRACE_boundaries 0      // Complete and reduced boundaries
+#define TRACE_predictionProgress 0 // Reduced, horizontal and vertical upsample prediction
 #define TRACE_distortion 0  // SAD and SATD distortion
 #define TRACE_fineGrainedNeighborAvailability 0  // Fine-grained details of what neighboring units are available for intra references
 
@@ -124,6 +124,8 @@ class storch{
         static int targetBlock_multSizes; // used to trace multiple CU sizes on the same CTU
         static int target_availability;
         static std::ofstream mip_file;
+        static int traceCall;
+        static int bitsMip;
         
         // Translating CU dimensions into enum or strings
         static CuSize translateCuSize(int width, int height);
@@ -131,6 +133,10 @@ class storch{
         static int getSizeId(CuSize size);
 
         // Tracking intra prediction time
+
+        static void startBitrateRmdMip();
+        static void finishBitrateRmdMip();
+
         static void startIntraRmdPart1();
         static void finishIntraRmdPart1();
 
@@ -165,6 +171,10 @@ class storch{
         static struct timeval rmdGen1, rmdGen2, rmdHevc1, rmdHevc2, rmdVvc1, rmdVvc2, rmdMrl1, rmdMrl2, rmdMip1, rmdMip2, rdoGen1, rdoGen2, rdoIsp1, rdoIsp2; 
         static double intraRmdGenTime, intraRmd1Time, intraRmd2Time, intraRmdMrlTime, intraRmdMipTime, intraRdoGenTime, intraRdoIspTime;
         static double intraRmdMipTime_size[NUM_CU_SIZES], intraRmdMipTime_sizeId[3];
+        
+        static struct timeval probeBitrateRmdMip1, probeBitrateRmdMip2;
+        static double timeBitrateRmdMip;
+        static double countBitrateRmdMip;
         
         static PelBuf reconstructedPrev;
         static Picture previousPic;

@@ -657,7 +657,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
   const int width  = partitioner.currArea().lwidth();
   const int height = partitioner.currArea().lheight();
-
+  
   // Marking MTS usage for faster MTS
   // 0: MTS is either not applicable for current CU (cuWidth > MTS_INTRA_MAX_CU_SIZE or cuHeight > MTS_INTRA_MAX_CU_SIZE), not active in the config file or the fast decision algorithm is not used in this case
   // 1: MTS fast algorithm can be applied for the current CU, and the DCT2 is being checked
@@ -724,11 +724,11 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   CuSize cuSize = storch::translateCuSize(cu.lwidth(), cu.lheight());
   int cuSizeId = storch::getSizeId(cuSize);
   
-  int traceCall = TRACE_estIntraPredLumaQT;
-  traceCall &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
-  traceCall &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));
+  storch::traceCall = TRACE_estIntraPredLumaQT;
+  storch::traceCall &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
+  storch::traceCall &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));
   
-  if( traceCall ){
+  if( storch::traceCall ){
     if(TRACE_estIntraPredLumaQT){
       printf("estIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
   
@@ -794,6 +794,22 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       storch::startIntraRmdGeneral();
       if (mtsUsageFlag != 2)
       {
+        // Extract the predicted samples during MIP
+        int ctuX, ctuY;
+        // Get coordinates of current CTU
+        ctuX = (cu.lx()>>7)<<7;
+        ctuY = (cu.ly()>>7)<<7;  
+        // Proper size
+        CuSize cuSize = storch::translateCuSize(cu.lwidth(), cu.lheight());
+        int cuSizeId = storch::getSizeId(cuSize);
+
+        // Verify if current block is eligible for tracing (size and position)
+        int traceBlock = 1;
+        traceBlock &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
+        traceBlock &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));             
+
+        storch::targetBlock = traceBlock;
+        
         // this should always be true
         CHECK(!pu.Y().valid(), "PU is not valid");
         bool isFirstLineOfCtu     = (((pu.block(COMPONENT_Y).y) & ((pu.cs->sps)->getMaxCUWidth() - 1)) == 0);
@@ -902,9 +918,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               m_CABACEstimator->getCtx() = SubCtx(Ctx::IntraLumaPlanarFlag, ctxStartPlanarFlag);
               m_CABACEstimator->getCtx() = SubCtx(Ctx::IntraLumaMpmFlag, ctxStartIntraMode);
               m_CABACEstimator->getCtx() = SubCtx( Ctx::MultiRefLineIdx, ctxStartMrlIdx );
-
+              
               uint64_t fracModeBits = xFracModeBitsIntra(pu, mode, CHANNEL_TYPE_LUMA);
-
+   
               double cost = (double) minSadHad + (double) fracModeBits * sqrtLambdaForFirstPass;
 
               DTRACE(g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode);
@@ -1182,23 +1198,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               double mipHadCost[MAX_NUM_MIP_MODE] = { MAX_DOUBLE };
 
               
-              // Extract the predicted samples during MIP
-              int ctuX, ctuY;
-              // Get coordinates of current CTU
-              ctuX = (cu.lx()>>7)<<7;
-              ctuY = (cu.ly()>>7)<<7;  
-              // Proper size
-              CuSize cuSize = storch::translateCuSize(cu.lwidth(), cu.lheight());
-              int cuSizeId = storch::getSizeId(cuSize);
-              
-              // Verify if current block is eligible for tracing (size and position)
-              int traceBlock = 1;
-              traceBlock &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
-              traceBlock &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));             
-
-              storch::targetBlock = traceBlock;
-
-              
               // At this point the reference samples are derived
               // Fetch the reference samples that will be used in MIP
               if(ALTERNATIVE_REF_MIP && TEMPORAL_INTRA){
@@ -1250,13 +1249,28 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                   minSadHad = std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));
                 }
                   
+//                if(storch::targetBlock && TRACE_distortion) {
+//                    // distParamHad_4x4.extract_rd = 1;
+//                    printf("MIP SAD distortion PRE x2 SCALE %ld\n", distParamSad.distFunc(distParamSad));
+//                    printf("MIP,M=%d,SATD Distortion ORG %ld\n", modeFull, distParamHad.distFunc(distParamHad));
+//                    printf("MIP,M=%d,SATD Distortion 4x4 %ld\n", modeFull, distParamHad_4x4.distFunc(distParamHad_4x4));
+//                    printf("MIP,M=%d,Transp=%d,BITS %ld\n\n", modeFull, isTransposed, fracModeBits);
+//                }
+                 
+                m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);
+
+                storch::startBitrateRmdMip();
+                uint64_t fracModeBits = xFracModeBitsIntra(pu, mode, CHANNEL_TYPE_LUMA);
+                storch::finishBitrateRmdMip();
+
                 if(storch::targetBlock && TRACE_distortion) {
                     // distParamHad_4x4.extract_rd = 1;
                     printf("MIP SAD distortion PRE x2 SCALE %ld\n", distParamSad.distFunc(distParamSad));
                     printf("MIP,M=%d,SATD Distortion ORG %ld\n", modeFull, distParamHad.distFunc(distParamHad));
-                    printf("MIP,M=%d,SATD Distortion 4x4 %ld\n\n", modeFull, distParamHad_4x4.distFunc(distParamHad_4x4));
+                    printf("MIP,M=%d,SATD Distortion 4x4 %ld\n", modeFull, distParamHad_4x4.distFunc(distParamHad_4x4));
+                    printf("MIP,M=%d,Transp=%d,BitsMode %d\n", modeFull, isTransposed, storch::bitsMip);
+                    printf("MIP,M=%d,Transp=%d,BitsTotal %ld\n", modeFull, isTransposed, fracModeBits);
                 }
-                 
                 
                 if(EXTRACT_distortion && storch::targetBlock){
                   int ctuIdx = 0;
@@ -1266,15 +1280,11 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                   ctuIdx += cu.lx()/128;
                           
                   storch::mip_file << cs.picture->poc << "," << ctuIdx << "," << storch::translateCuSize(storch::translateCuSize(cs.area.lwidth(), cs.area.lheight())) << "," << cs.area.lwidth() << "," << cs.area.lheight() << "," << cs.area.lx() << "," << cs.area.ly() << ",";
-                  storch::mip_file << modeFull << "," << distParamSad.distFunc(distParamSad) << "," << distParamHad_4x4.distFunc(distParamHad_4x4) << "," << distParamHad.distFunc(distParamHad) << endl;
-                }        
+                  storch::mip_file << modeFull << "," << distParamSad.distFunc(distParamSad) << "," << distParamHad_4x4.distFunc(distParamHad_4x4) << "," << distParamHad.distFunc(distParamHad) << "," << minSadHad << "," << storch::bitsMip << endl;
+                }
                 
-                distParamHad_4x4.extract_rd = 0;
-                  
-                m_CABACEstimator->getCtx() = SubCtx(Ctx::MipFlag, ctxStartMipFlag);
 
-                uint64_t fracModeBits = xFracModeBitsIntra(pu, mode, CHANNEL_TYPE_LUMA);
-
+                
                 double cost            = double(minSadHad) + double(fracModeBits) * sqrtLambdaForFirstPass;
                 mipHadCost[modeFull]   = cost;
                 DTRACE(g_trace_ctx, D_INTRA_COST, "IntraMIP: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost,
@@ -1314,7 +1324,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             }
             // Probe MIP end
             storch::finishIntraRmdMip(pu.lwidth(), pu.lheight());            
-            
+
             if (sps.getUseMIP() && lfnstSaveFlag)
             {
               // save found best modes
@@ -6008,7 +6018,7 @@ uint64_t IntraSearch::xFracModeBitsIntra(PredictionUnit &pu, const uint32_t &mod
   {
     std::swap(orgMode, pu.intraDir[chType]);
   }
-
+  
   m_CABACEstimator->resetBits();
 
   if( isLuma( chType ) )

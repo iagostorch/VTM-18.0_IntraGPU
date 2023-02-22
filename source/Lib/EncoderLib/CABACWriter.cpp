@@ -42,6 +42,7 @@
 
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_buffer.h"
+#include "storchmain.h"
 
 #include <map>
 #include <algorithm>
@@ -1119,18 +1120,18 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
 
 
 void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
-{
-  if (pu.cu->bdpcmMode)
-  {
+{  
+    if (pu.cu->bdpcmMode)
+  {       
     return;
   }
   mip_flag(*pu.cu);
   if (pu.cu->mipFlag)
-  {
+  { 
     mip_pred_mode(pu);
     return;
   }
-  extend_ref_line( pu );
+  extend_ref_line( pu );  
   isp_mode( *pu.cu );
 
   // prev_intra_luma_pred_flag
@@ -1138,7 +1139,7 @@ void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
   unsigned  mpm_pred[numMPMs];
 
   PU::getIntraMPMs( pu, mpm_pred );
-
+  
   unsigned ipred_mode = pu.intraDir[0];
   unsigned mpm_idx = numMPMs;
 
@@ -1149,7 +1150,7 @@ void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
       mpm_idx = idx;
       break;
     }
-  }
+  }  
   if ( pu.multiRefIdx )
   {
     CHECK(mpm_idx >= numMPMs, "use of non-MPM");
@@ -1161,7 +1162,7 @@ void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
 
   // mpm_idx / rem_intra_luma_pred_mode
   if( mpm_idx < numMPMs )
-  {
+  { 
     unsigned ctx = (pu.cu->ispMode == NOT_INTRA_SUBPARTITIONS ? 1 : 0);
     if (pu.multiRefIdx == 0)
     {
@@ -3476,10 +3477,14 @@ void CABACWriter::mip_pred_modes( const CodingUnit& cu )
 
 void CABACWriter::mip_pred_mode( const PredictionUnit& pu )
 {
+  // The context only interferes with the value of m_EstFracBits PRIOR TO THE CALL of MIP prediction
+  // The bitrate of any MIP mode depends only on the number of the mode and the number of available modes
   m_BinEncoder.encodeBinEP( (pu.mipTransposedFlag ? 1 : 0) );
-
+    
   const int numModes = getNumModesMip( pu.Y() );
   CHECKD( pu.intraDir[CHANNEL_TYPE_LUMA] < 0 || pu.intraDir[CHANNEL_TYPE_LUMA] >= numModes, "Invalid MIP mode" );
+
+  // This depends only on the number of the current mode and the number of available modes
   xWriteTruncBinCode( pu.intraDir[CHANNEL_TYPE_LUMA], numModes );
 
   DTRACE( g_trace_ctx, D_SYNTAX, "mip_pred_mode() pos=(%d,%d) mode=%d transposed=%d\n", pu.lumaPos().x, pu.lumaPos().y, pu.intraDir[CHANNEL_TYPE_LUMA], pu.mipTransposedFlag ? 1 : 0 );
