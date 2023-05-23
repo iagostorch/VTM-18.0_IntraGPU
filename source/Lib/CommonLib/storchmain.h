@@ -22,6 +22,7 @@
 
 #include "CommonLib/Unit.h"
 #include "Slice.h"
+//#include "rapl.h"
 
 // My directives
 
@@ -31,18 +32,18 @@
 //
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#define GPU_MIP 1                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
+#define GPU_MIP 0                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
 
-#define ENABLE_SPLIT_HEURISTICS 0
+#define ENABLE_SPLIT_HEURISTICS 1
 
 // When both are disabled we conduct the vanilla intra prediction, with predicted samples from the same frame
 #define TEMPORAL_INTRA 0 // When enabled, the references for intra predictin are fetched from the previous reconstructed frame
-#define ORIG_SAMPLES_INTRA 1 // When enabled, the references for intra predictin are the original samples of the current frame
+#define ORIG_SAMPLES_INTRA 0 // When enabled, the references for intra predictin are the original samples of the current frame
 
 // Defines on what encoding stage the alternative references (temporal or orig) will be used
 #define ALTERNATIVE_REF_ANGULAR 0
 #define ALTERNATIVE_REF_MRL 0
-#define ALTERNATIVE_REF_MIP 1
+#define ALTERNATIVE_REF_MIP 0
 
 
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -63,6 +64,8 @@
 #define TRACE_predictionProgress 0 // Reduced, horizontal and vertical upsample prediction
 #define TRACE_distortion 0  // SAD and SATD distortion
 #define TRACE_fineGrainedNeighborAvailability 0  // Fine-grained details of what neighboring units are available for intra references
+
+#define TRACE_energy 1
 
 #define EXTRACT_blockData 0             // Extract block data is NOT FUNCTIONING anymore
 #define EXTRACT_frames 0                // Extract the original, true original, predicted and reconstructed frame
@@ -161,6 +164,9 @@ class storch{
         static void storeRecBuf(Picture* pic);
         static PelStorage loadRecBuf();
         static void printRecBuf();
+        
+        static void incEnergy_total(double newVal);
+        static void incEnergy_core(double newVal);
 
 
         
@@ -179,7 +185,8 @@ class storch{
         static PelBuf reconstructedPrev;
         static Picture previousPic;
         static PelStorage recoBuf;
-    
+        
+        static double totalEnergy_total, totalEnergy_core;
         
 };
 

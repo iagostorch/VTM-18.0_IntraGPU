@@ -47,6 +47,9 @@
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "storchmain.h"
+#if TRACE_energy
+  #include "rapl.h"
+#endif
 
 #include <math.h>
 #include <limits>
@@ -790,6 +793,17 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
     }
     else
     {
+#if TRACE_energy
+      if(included==0){
+        rapl_monitor_start();   // CALLED ONCE
+        included=1;
+      }
+      
+      double e0_total, e1_total;
+      double e0_core, e1_core;
+#endif
+
+      
       // Probe start of RMD
       storch::startIntraRmdGeneral();
       if (mtsUsageFlag != 2)
@@ -1173,7 +1187,10 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             }
             // Probe MIP start
             storch::startIntraRmdMip();
-            
+#if TRACE_energy            
+            e0_total = rapl_monitor_report();
+            e0_core = rapl_monitor_report_core();
+#endif
             //*** Derive MIP candidates using Hadamard
             if (testMip && !supportedMipBlkSize)
             {             
@@ -1323,6 +1340,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               storch::targetBlock = 0;
             }
             // Probe MIP end
+#if TRACE_energy            
+            e1_total = rapl_monitor_report();
+            e1_core = rapl_monitor_report_core();
+            //cout << "MIP RMD Energy consumed: " << (e1_total - e0_total) << " joules\n";
+            storch::incEnergy_total(e1_total-e0_total);
+            storch::incEnergy_core(e1_core-e0_core);
+#endif
             storch::finishIntraRmdMip(pu.lwidth(), pu.lheight());            
 
             if (sps.getUseMIP() && lfnstSaveFlag)
@@ -1534,8 +1558,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         }
       }
       // Probe RMD general end
-      storch::finishIntraRmdGeneral();
-    }
+      storch::finishIntraRmdGeneral();      
+    } 
 
     // At this point we have the list of RDO candidates to be tested
     // Probe RDO begin

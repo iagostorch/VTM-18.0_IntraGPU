@@ -34,6 +34,8 @@ struct timeval storch::rmdGen1, storch::rmdGen2, storch::rmdHevc1, storch::rmdHe
 double storch::intraRmdGenTime, storch::intraRmd1Time, storch::intraRmd2Time, storch::intraRmdMrlTime, storch::intraRmdMipTime, storch::intraRdoGenTime, storch::intraRdoIspTime;
 double storch::intraRmdMipTime_size[NUM_CU_SIZES], storch::intraRmdMipTime_sizeId[3];
 
+double storch::totalEnergy_total, storch::totalEnergy_core;
+
 PelBuf storch::reconstructedPrev;
 Picture storch::previousPic;
 PelStorage storch::recoBuf;
@@ -70,6 +72,9 @@ storch::storch() {
   intraRmdMipTime_sizeId[1] = 0.0;
   intraRmdMipTime_sizeId[2] = 0.0;
   
+  totalEnergy_total = 0.0;
+  totalEnergy_core = 0.0;
+  
   for(int i=0; i<NUM_CU_SIZES; i++){
     intraRmdMipTime_size[i] = 0.0;
   }
@@ -98,6 +103,9 @@ void storch::finishEncoding(){
   printf("ALTERNATIVE_REF_MIP:      %d\n", ALTERNATIVE_REF_MIP);
   printf("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n");
   
+  printf("-=-=-=-=-=  ENERGY  =-=-=-=-=-  \n");
+  printf("Total energy in RMD MIP:  %f\n", totalEnergy_total);
+  printf("Core energy in RMD MIP:   %f\n\n", totalEnergy_core);
           
   printf("-=-=-=-=-=  TIMES  =-=-=-=-=-  \n");
   
@@ -712,4 +720,10 @@ void storch::finishBitrateRmdMip(){
 }
 
 
+void storch::incEnergy_total(double newVal){
+  totalEnergy_total += newVal;
+}
 
+void storch::incEnergy_core(double newVal){
+  totalEnergy_core += newVal;
+}
