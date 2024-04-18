@@ -49,6 +49,7 @@ char rapl_domain_names[NUM_RAPL_DOMAINS][30]= {
 };
 
 #define RAPL_CORE_DOMAIN 0
+#define RAPL_PKG_DOMAIN 2
 
 
 static int check_paranoid(void) {
@@ -265,6 +266,27 @@ double rapl_monitor_report_core() {
             }
 //                    close(rapl_fd[i][
             total_energy += (double)value*rapl_scale[RAPL_CORE_DOMAIN];	// in Joules
+        }
+    }
+
+    return total_energy;
+}
+
+// Reports energy only for the PACKAGE domain
+double rapl_monitor_report_pkg() {
+    int j;
+    long long value;
+    double total_energy = 0;
+    int ret;
+
+    for(j=0;j<rapl_total_packages;j++) {
+        if (rapl_fd[RAPL_PKG_DOMAIN][j]!=-1) {
+            ret = read(rapl_fd[RAPL_PKG_DOMAIN][j],&value,8);
+            if(ret==-5){
+                printf("Faz algo\n");        
+            }
+//                    close(rapl_fd[i][
+            total_energy += (double)value*rapl_scale[RAPL_PKG_DOMAIN];	// in Joules
         }
     }
 
