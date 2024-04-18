@@ -13,6 +13,7 @@
 
 #include "storchmain.h"
 #include "Picture.h"
+#include <math.h>
 
 int storch::var, storch::numExtractedBlocks;
 int storch::extractedFrames[EXT_NUM][500];
@@ -24,6 +25,10 @@ int storch::bitsMip;
 std::ofstream storch::mip_file;
 
 
+Pel* storch::reconstructedFrame;
+Pel* storch::predictedFrame;
+int storch::frameWidth, storch::frameHeight;
+bool storch::isInitialized;
 
 struct timeval storch::probeBitrateRmdMip1, storch::probeBitrateRmdMip2;
 double storch::timeBitrateRmdMip;
@@ -34,11 +39,11 @@ struct timeval storch::rmdGen1, storch::rmdGen2, storch::rmdHevc1, storch::rmdHe
 double storch::intraRmdGenTime, storch::intraRmd1Time, storch::intraRmd2Time, storch::intraRmdMrlTime, storch::intraRmdMipTime, storch::intraRdoGenTime, storch::intraRdoIspTime;
 double storch::intraRmdMipTime_size[NUM_CU_SIZES], storch::intraRmdMipTime_sizeId[3];
 
-double storch::totalEnergy_total, storch::totalEnergy_core;
+double storch::totalEnergy_total, storch::totalEnergy_core, storch::totalEnergy_pkg;
 
 PelBuf storch::reconstructedPrev;
 Picture storch::previousPic;
-PelStorage storch::recoBuf;
+PelStorage storch::recoBuf, storch::predBuf, storch::convOrig;
 
 
 storch::storch() {
@@ -46,7 +51,7 @@ storch::storch() {
     for(int POC=0; POC<500; POC++){
         extractedFrames[EXT_ORIGINAL][POC] = 0;
     }
-  }
+  } 
   var = 0;
   numExtractedBlocks = 0;
   targetBlock=0;
@@ -74,6 +79,8 @@ storch::storch() {
   
   totalEnergy_total = 0.0;
   totalEnergy_core = 0.0;
+   
+  isInitialized = 0;
   
   for(int i=0; i<NUM_CU_SIZES; i++){
     intraRmdMipTime_size[i] = 0.0;
@@ -81,6 +88,7 @@ storch::storch() {
   
   previousPic = Picture();
   recoBuf = PelStorage();
+  convOrig = PelStorage();
   
   if(EXTRACT_distortion){     
       string mipFileName = (string) "mip_costs.csv";
@@ -90,13 +98,15 @@ storch::storch() {
   }
 }
 
-void storch::finishEncoding(){
+void storch::finishEncoding(){  
   printf("\n\n");
   printf("-=-=-=-=-=  MACROS  =-=-=-=-=-  \n");
   printf("SIMD_ENABLE:              %d\n", SIMD_ENABLE);
   printf("GPU_MIP:                  %d\n", GPU_MIP);
   printf("ENABLE_SPLIT_HEURISTICS:  %d\n", ENABLE_SPLIT_HEURISTICS);
   printf("TEMPORAL_INTRA:           %d\n", TEMPORAL_INTRA);
+  printf("TEMPORAL_PRED :           %d\n", TEMPORAL_PRED);
+  printf("CONVOLVED_SAMPLES_INTRA:  %d\n", CONVOLVED_SAMPLES_INTRA);
   printf("ORIG_SAMPLES_INTRA:       %d\n", ORIG_SAMPLES_INTRA);
   printf("ALTERNATIVE_REF_ANGULAR:  %d\n", ALTERNATIVE_REF_ANGULAR);
   printf("ALTERNATIVE_REF_MRL:      %d\n", ALTERNATIVE_REF_MRL);
@@ -105,6 +115,7 @@ void storch::finishEncoding(){
   
   printf("-=-=-=-=-=  ENERGY  =-=-=-=-=-  \n");
   printf("Total energy in RMD MIP:  %f\n", totalEnergy_total);
+  printf("Package energy in RMD MIP:  %f\n", totalEnergy_pkg);
   printf("Core energy in RMD MIP:   %f\n\n", totalEnergy_core);
           
   printf("-=-=-=-=-=  TIMES  =-=-=-=-=-  \n");
@@ -137,8 +148,10 @@ void storch::finishEncoding(){
 
 // Export the samples of a PU into a CSV file
 void storch::exportSamplesBlock_v2(PelBuf samples, SamplesType type, int x, int y){
-    int h,w;
 
+    int w = samples.width;
+    int h = samples.height;
+    
     std::ofstream fileHandler;
     string name;
 
@@ -150,12 +163,14 @@ void storch::exportSamplesBlock_v2(PelBuf samples, SamplesType type, int x, int 
     }
     else if(type == EXT_PREDICTED){
         name = (string) "block_predicted";
+	name += "_" + std::to_string(w) + "x" + std::to_string(h);
         name += "_" + std::to_string(x) + "x" + std::to_string(y);
         name += "_" + std::to_string(storch::numExtractedBlocks) + ".csv";
         storch::numExtractedBlocks++;
     }
     else if(type == EXT_ORIGINAL){
       name = (string) "block_original";
+      name += "_" + std::to_string(w) + "x" + std::to_string(h);
       name += "_" + std::to_string(x) + "x" + std::to_string(y);
       name += ".csv";
     }
@@ -322,6 +337,45 @@ void storch::exportSamplesFrame(PelBuf samples, int POC, SamplesType type){
             }
             fileHandler.close();
             extractedFrames[EXT_RECONSTRUCTED][POC] = 1; // Mark the current frame as extracted
+            
+            
+            // Export another "reconstructed" frame kept on the simple Pel* array
+            
+             name = (string) "reconstructedMalloc_" + to_string(POC);
+             fileHandler.open(name + ".csv");
+             
+             for(h=0; h<storch::frameHeight; h++){
+               for(w=0; w<storch::frameWidth-1; w++){
+                 fileHandler << storch::reconstructedFrame[h*storch::frameWidth+w] << ",";
+               }
+               fileHandler << storch::reconstructedFrame[h*storch::frameWidth+w];
+               fileHandler << endl;
+             }
+             fileHandler.close();            
+            
+        }
+    }
+    else if(type == EXT_CONVOLVED_KERNEL){
+      if(extractedFrames[EXT_CONVOLVED_KERNEL][POC] == 0){ // If the reconstructed frame was not extracted yet...
+//            cout << "reconstructed " << POC << endl;
+            std::ofstream fileHandler;
+
+            string name = (string) "convolved_" + to_string(POC);
+
+            fileHandler.open(name + ".csv");
+
+            int frameWidth = samples.width;
+            int frameHeight = samples.height;
+
+            for (h=0; h<frameHeight; h++){
+                for(w=0; w<frameWidth-1; w++){
+                    fileHandler << samples.at(w,h) << ",";
+                }
+                fileHandler << samples.at(w,h);
+                fileHandler << endl;
+            }
+            fileHandler.close();
+            extractedFrames[EXT_CONVOLVED_KERNEL][POC] = 1; // Mark the current frame as extracted
         }
     }
     else{
@@ -369,15 +423,22 @@ void storch::exportIntraReferences(Pel *buffer, CodingUnit cu, SamplesType type)
   int x = cu.lx();
   int y = cu.ly();
   
+  int w = cu.lwidth();
+  int h = cu.lheight();
+  
   std::ofstream fileHandler;
   string name;
 
+  printf("Exporting references. MRL=%d MIP=%d ISP=%d\n", -1, cu.mipFlag, cu.ispMode);
+  
   if(type == INTRA_REF_UNFILTERED){
     name = (string) "intra_ref_unfiltered";
+    name += "_" + std::to_string(w) + "x" + std::to_string(h);
     name += "_" + std::to_string(x) + "x" + std::to_string(y) + ".csv";
   }
   else if(type == INTRA_REF_FILTERED){
     name = (string) "intra_ref_filtered";
+    name += "_" + std::to_string(w) + "x" + std::to_string(h);
     name += "_" + std::to_string(x) + "x" + std::to_string(y) + ".csv";
   }
   else{
@@ -388,7 +449,7 @@ void storch::exportIntraReferences(Pel *buffer, CodingUnit cu, SamplesType type)
 
   
   // TODO: This only works for LUMA with MRL=0
-  int totalReferences = (cu.lwidth() * cu.lheight())/16 + 1;
+  int totalReferences = ( cu.lwidth() + cu.lheight() + 1 )*2;
 
   for (int r=0; r<totalReferences; r++){
     fileHandler << buffer[r] << ",";
@@ -645,55 +706,71 @@ void storch::finishIntraRmdMrl(){
   intraRmdMrlTime += (double) (rmdMrl2.tv_usec - rmdMrl1.tv_usec)/1000000 + (double) (rmdMrl2.tv_sec - rmdMrl1.tv_sec);
 }
 
-void storch::storeRecBuf(Picture* pic){
-//  recoBuf = pic->m_bufs[PIC_RECONSTRUCTION];
-//  recoBuf.copyFrom(pic->getRecoBuf(),true );
-//  printf("CHAMOU STORE\n");
-  recoBuf.createFromBuf(pic->getRecoBuf());
-  
-//  free(recoBuf.bufs[COMPONENT_Y].buf);
-  
-  recoBuf.bufs[COMPONENT_Y].buf = (Pel*) malloc(sizeof(Pel) * pic->getRecoBuf(COMPONENT_Y).height * pic->getRecoBuf(COMPONENT_Y).stride);
-  
-  // Cópia explicita dos pixels pra evitar ponteiros
-  // Pel* pixels = pic->getRecoBuf(COMPONENT_Y).buf;
-//  int pSize = pic->getRecoBuf(COMPONENT_Y).height * pic->getRecoBuf(COMPONENT_Y).stride;
-//  Pel* pixels = (Pel*) malloc(sizeof(Pel) * pSize);
-//  memcpy(pixels, pic->getRecoBuf(COMPONENT_Y).buf, pSize);
-//  memcpy(recoBuf.bufs[COMPONENT_Y].buf, pixels, pSize);
-  
-//  printf("Width=%d  Height=%d  Stride=%d\n", pic->getRecoBuf(COMPONENT_Y).width, pic->getRecoBuf(COMPONENT_Y).height, pic->getRecoBuf(COMPONENT_Y).stride);
-  
-//  memcpy(recoBuf.bufs[COMPONENT_Y].buf, pic->getRecoBuf(COMPONENT_Y).buf, pSize);
-  
-  int stride = pic->getRecoBuf(COMPONENT_Y).stride;
-  //*
-  for(int i=0; i<pic->getPicHeightInLumaSamples(); i++){
-    for(int j=0; j<pic->getPicWidthInLumaSamples(); j++){
-      recoBuf.bufs[COMPONENT_Y].buf[i*stride + j] = pic->getRecoBuf(COMPONENT_Y).buf[i*stride + j];
-//      recoBuf.bufs[COMPONENT_Y].buf[i*stride + j] = pixels[i*stride + j];
-//      recoBuf.bufs[COMPONENT_Y].buf[i*stride + j] = pixels[i*832 + j];
-    }
-  }  
-  //*/
-  
-  /*
-  for(int i=0; i<pic->getPicHeightInLumaSamples(); i++){
-    for(int j=0; j<pic->getPicWidthInLumaSamples(); j++){
-      printf("%d,", recoBuf.bufs[COMPONENT_Y].buf[i*stride + j]);
-      
-//      printf("%d,", recoBuf.bufs[COMPONENT_Y].buf[i*832 + j]);
-    }
-    printf("\n");
-  }
-  printf("############################################\n");
-  //*/
-  
-}
 
 PelStorage storch::loadRecBuf(){
   return recoBuf;
 }
+
+void storch::storeRecBuf_2(Picture* pic){
+
+  recoBuf.createFromBuf(pic->getRecoBuf());
+  recoBuf.bufs[COMPONENT_Y].buf = (Pel*) malloc(sizeof(Pel) * pic->getRecoBuf(COMPONENT_Y).height * pic->getRecoBuf(COMPONENT_Y).stride);
+  
+  int stride = pic->getRecoBuf(COMPONENT_Y).stride;
+  for(int i=0; i<pic->getPicHeightInLumaSamples(); i++){
+    for(int j=0; j<pic->getPicWidthInLumaSamples(); j++){
+      recoBuf.bufs[COMPONENT_Y].buf[i*stride + j]        = pic->getRecoBuf(COMPONENT_Y).at(j,i);
+      storch::reconstructedFrame[i*storch::frameWidth+j] = pic->getRecoBuf(COMPONENT_Y).at(j,i);
+    }
+  }  
+}
+
+void storch::storePredBuf_2(Picture* pic){
+
+  predBuf.createFromBuf(pic->getRecoBuf());
+  predBuf.bufs[COMPONENT_Y].buf = (Pel*) malloc(sizeof(Pel) * pic->getRecoBuf(COMPONENT_Y).height * pic->getRecoBuf(COMPONENT_Y).stride);
+  
+  
+  int stride = pic->getRecoBuf(COMPONENT_Y).stride;
+  for(int i=0; i<pic->getPicHeightInLumaSamples(); i++){
+    for(int j=0; j<pic->getPicWidthInLumaSamples(); j++){     
+      predBuf.bufs[COMPONENT_Y].buf[i*stride + j]    = pic->getRecoBuf(COMPONENT_Y).at(j,i);
+      storch::predictedFrame[i*storch::frameWidth+j] = pic->getRecoBuf(COMPONENT_Y).at(j,i);
+    }
+  }  
+}
+
+
+PelStorage storch::loadPredBuf(){
+  return predBuf;
+}
+
+
+void storch::storeConvBuf(Picture* pic, PelBuf buffer){
+
+  if((pic->getPicWidthInLumaSamples() != buffer.width) 
+  || (pic->getPicHeightInLumaSamples() != buffer.height)){
+    printf("DIMENSIONS BETWEEN pic AND buffer DONT MATCH\n");
+    return;
+  }
+  
+  convOrig.createFromBuf(pic->getOrigBuf());
+    
+  convOrig.bufs[COMPONENT_Y].buf = (Pel*) malloc(sizeof(Pel) * pic->getOrigBuf(COMPONENT_Y).height * pic->getOrigBuf(COMPONENT_Y).stride);
+  
+
+  for(int i=0; i<pic->getPicHeightInLumaSamples(); i++){
+    for(int j=0; j<pic->getPicWidthInLumaSamples(); j++){
+      convOrig.bufs[COMPONENT_Y].at(j,i) =  buffer.at(j,i);
+
+    }
+  }   
+}
+
+PelStorage storch::loadConvBuf(){
+  return convOrig;
+}
+
 
 void storch::printRecBuf(){
   printf("CHAMOU PRINT REC_BUFFER\n");
@@ -726,4 +803,923 @@ void storch::incEnergy_total(double newVal){
 
 void storch::incEnergy_core(double newVal){
   totalEnergy_core += newVal;
+}
+
+void storch::incEnergy_pkg(double newVal){
+  totalEnergy_pkg += newVal;
+}
+
+
+PelBuf storch::convolveFrameKernel_v2(PelBuf frame, KERNEL kernelSelector){
+  Pel *buf = (Pel*) malloc(sizeof(Pel) * frame.width * frame.height);
+  
+  AreaBuf<Pel> convolved(buf, frame.width, frame.width, frame.height);
+
+   
+   int temp=0;
+   
+   // BLUR_3x3
+   if(kernelSelector <= BLUR_3x3_v6)
+   {
+     
+    int blur_3x3[3][3];
+    
+    if(kernelSelector==BLUR_3x3_v0){
+      
+      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v0\n");
+      for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_v0[i][j];
+        }
+      }
+    }
+    else if(kernelSelector==BLUR_3x3_v1){
+      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v1\n");
+      for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_v1[i][j];
+        }
+      }      
+    }
+    else if(kernelSelector==BLUR_3x3_v2){
+      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v2\n");
+      for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_v2[i][j];
+        }
+      }      
+    }
+    else if(kernelSelector==BLUR_3x3_v3){
+      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v3\n");
+      for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_v3[i][j];
+        }
+      }      
+    }
+    else if(kernelSelector==BLUR_3x3_v4){
+      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v4\n");
+      for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_v4[i][j];
+        }
+      }      
+    }
+    else if(kernelSelector==BLUR_3x3_v5){
+      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v5\n");
+      for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_v5[i][j];
+        }
+      }      
+    }
+    else if(kernelSelector==BLUR_3x3_v6){
+      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v6\n");
+      for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_v6[i][j];
+        }
+      }      
+    }
+    
+    // Compute divider for the filter
+    float div = 0.0, div_corner=0.0, div_firstLast = 0.0;
+    
+    // Easy case
+    for(int y=0; y<3; y++){
+       for(int x=0; x<3; x++){
+         div += blur_3x3[y][x];
+       }
+    }
+    
+    // Corner
+    for(int y=1; y<3; y++){
+      for(int x=1; x<3; x++){
+        div_corner += blur_3x3[y][x];
+      }
+    }
+    
+    // First/Last rows/columns without corners
+    for(int y=1; y<3; y++){
+      for(int x=0; x<3; x++){
+        div_firstLast += blur_3x3[y][x];
+      }
+    }
+    
+    
+     // Easy case without borders
+     for(int y=1; y<frame.height-1; y++){
+       for(int x=1; x<frame.width-1; x++){
+         temp = 0;
+         
+         temp += blur_3x3[0][0]*frame.at(x-1,y-1);        
+         temp += blur_3x3[0][1]*frame.at(x, y-1);
+         temp += blur_3x3[0][2]*frame.at(x+1,y-1);
+         
+         temp += blur_3x3[1][0]*frame.at(x-1,y);
+         temp += blur_3x3[1][1]*frame.at(x,y);
+         temp += blur_3x3[1][2]*frame.at(x+1,y);
+         
+         temp += blur_3x3[2][0]*frame.at(x-1,y+1);
+         temp += blur_3x3[2][1]*frame.at(x,y+1);
+         temp += blur_3x3[2][2]*frame.at(x+1,y+1);
+         
+//         printf("(y,x)=%d | div=%f | ==%f\n", temp, div, temp/div);
+         
+         temp = round(temp/div);
+//         printf("(y,x)=%d\n", temp);
+         convolved.at(x,y) = temp;
+       }
+     }
+     
+     // First and last rows without corners
+     for(int x=1; x<frame.width-1; x++){
+         int y;
+         
+         y = 0;
+         temp = 0;
+         temp += blur_3x3[1][0]*frame.at(x-1,y);
+         temp += blur_3x3[1][1]*frame.at(x,y);
+         temp += blur_3x3[1][2]*frame.at(x+1,y);
+         
+         temp += blur_3x3[2][0]*frame.at(x-1,y+1);
+         temp += blur_3x3[2][1]*frame.at(x,y+1);
+         temp += blur_3x3[2][2]*frame.at(x+1,y+1);
+         
+         temp = round(temp/div_firstLast);
+         convolved.at(x,y) = temp;
+         
+         y = frame.height-1;
+         
+
+	 temp = 0;
+         temp += blur_3x3[0][0]*frame.at(x-1,y-1);
+         temp += blur_3x3[0][1]*frame.at(x,y-1);
+         temp += blur_3x3[0][2]*frame.at(x+1,y-1);
+         
+         temp += blur_3x3[1][0]*frame.at(x-1,y);
+         temp += blur_3x3[1][1]*frame.at(x,y);
+         temp += blur_3x3[1][2]*frame.at(x+1,y);
+         
+         temp = round(temp/div_firstLast);
+         convolved.at(x,y) = temp;
+     }
+     
+     
+     for(int y=1; y<frame.height-1; y++){
+        int x;
+       
+        x = 0;
+       
+        temp = 0;
+        temp += blur_3x3[0][1]*frame.at(x, y-1);
+        temp += blur_3x3[0][2]*frame.at(x+1,y-1);
+
+        temp += blur_3x3[1][1]*frame.at(x,y);
+        temp += blur_3x3[1][2]*frame.at(x+1,y);
+
+        temp += blur_3x3[2][1]*frame.at(x,y+1);
+        temp += blur_3x3[2][2]*frame.at(x+1,y+1);   
+        
+        temp = round(temp/div_firstLast);
+        convolved.at(x,y) = temp;
+        
+        x = frame.width-1;
+  
+
+	temp = 0;
+        temp += blur_3x3[0][0]*frame.at(x-1, y-1);
+        temp += blur_3x3[0][1]*frame.at(x  , y-1);
+
+        temp += blur_3x3[1][0]*frame.at(x-1,y);
+        temp += blur_3x3[1][1]*frame.at(x,y);
+
+        temp += blur_3x3[2][0]*frame.at(x-1,y+1);
+        temp += blur_3x3[2][1]*frame.at(x,y+1);   
+        
+        temp = round(temp/div_firstLast);
+        convolved.at(x,y) = temp;
+     }
+   
+     
+     // Corner cases
+     int x, y;
+     // Top-Left
+     x = 0;
+     y = 0;
+     temp = blur_3x3[1][1]*frame.at(x,y) +  blur_3x3[1][2]*frame.at(x+1,y) + blur_3x3[2][1]*frame.at(x,y+1) + blur_3x3[2][2]*frame.at(x+1,y+1);
+     temp = round(temp/div_corner);
+     convolved.at(x,y) = temp;
+     // Top-Right
+     x = frame.width-1;
+     y = 0;
+     temp = blur_3x3[1][0]*frame.at(x-1,y) + blur_3x3[1][1]*frame.at(x,y) + blur_3x3[2][0]*frame.at(x-1,y+1) + blur_3x3[2][1]*frame.at(x,y+1);
+     temp = round(temp/div_corner);
+     convolved.at(x,y) = temp;
+     //Bottom-Left
+     x = 0;
+     y = frame.height-1;
+     temp = blur_3x3[0][1]*frame.at(x, y-1) + blur_3x3[0][2]*frame.at(x+1,y-1) + blur_3x3[1][1]*frame.at(x,y) + blur_3x3[1][2]*frame.at(x+1,y);
+     temp = round(temp/div_corner);
+     convolved.at(x,y) = temp;
+     // Bottom-Right
+     x = frame.width-1;
+     y = frame.height-1;
+     temp = blur_3x3[0][0]*frame.at(x-1,y-1) + blur_3x3[0][1]*frame.at(x, y-1) + blur_3x3[1][0]*frame.at(x-1,y) + blur_3x3[1][1]*frame.at(x,y);
+     temp = round(temp/div_corner);
+     convolved.at(x,y) = temp;
+         
+   }
+   else if(kernelSelector <= BLUR_5x5_v4)
+   {
+      int blur_5x5[5][5];
+    
+      if(kernelSelector==BLUR_5x5_v0){
+	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v0\n");
+	for(int i=0; i<5; i++){
+	  for(int j=0; j<5; j++){
+	    blur_5x5[i][j] = blur_5x5_v0[i][j];
+	  }
+	}
+      }
+      else if(kernelSelector==BLUR_5x5_v1){
+	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v1\n");
+	for(int i=0; i<5; i++){
+	  for(int j=0; j<5; j++){
+	    blur_5x5[i][j] = blur_5x5_v1[i][j];
+	  }
+	}      
+      }
+      else if(kernelSelector==BLUR_5x5_v2){
+	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v2\n");
+	for(int i=0; i<5; i++){
+	  for(int j=0; j<5; j++){
+	    blur_5x5[i][j] = blur_5x5_v2[i][j];
+	  }
+	}      
+      }
+      else if(kernelSelector==BLUR_5x5_v3){
+	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v3\n");
+	for(int i=0; i<5; i++){
+	  for(int j=0; j<5; j++){
+	    blur_5x5[i][j] = blur_5x5_v3[i][j];
+	  }
+	}
+      }
+      else if(kernelSelector==BLUR_5x5_v4){
+	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v4\n");
+	for(int i=0; i<5; i++){
+	  for(int j=0; j<5; j++){
+	    blur_5x5[i][j] = blur_5x5_v4[i][j];
+	  }
+	}      
+      }
+      
+      // Compute divider for the filter
+      float div=0.0, div_outerCorner=0.0, div_innerCorner=0.0, div_firstLast=0.0, div_befFirstLast=0.0;
+
+      // Easy case
+      for(int y=0; y<5; y++){
+	 for(int x=0; x<5; x++){
+	   div += blur_5x5[y][x];
+	 }
+      }
+
+      // Inner-Corner
+      for(int y=1; y<5; y++){
+	for(int x=1; x<5; x++){
+	  div_innerCorner += blur_5x5[y][x];
+	}
+      }
+      
+      // Outer-Corner
+      for(int y=2; y<5; y++){
+	for(int x=2; x<5; x++){
+	  div_outerCorner += blur_5x5[y][x];
+	}
+      }
+
+      // Before First/Last rows/columns without corners
+      for(int y=1; y<5; y++){
+	for(int x=0; x<5; x++){
+	  div_befFirstLast += blur_5x5[y][x];
+	}
+      }
+      
+      // Actual First/Last rows/columns without corners
+      for(int y=2; y<5; y++){
+	for(int x=0; x<5; x++){
+	  div_firstLast += blur_5x5[y][x];
+	}
+      }
+
+
+//       printf("CONVOLUTION\n");
+       // Easy case without borders
+       for(int y=2; y<frame.height-2; y++){
+	 for(int x=2; x<frame.width-2; x++){
+	   temp = 0;
+
+	   temp += blur_5x5[0][0]*frame.at(x-2,y-2);
+	   temp += blur_5x5[0][1]*frame.at(x-1,y-2);
+	   temp += blur_5x5[0][2]*frame.at(x,y-2);
+	   temp += blur_5x5[0][3]*frame.at(x+1,y-2);
+	   temp += blur_5x5[0][4]*frame.at(x+2,y-2);
+	   
+	   temp += blur_5x5[1][0]*frame.at(x-2,y-1);
+	   temp += blur_5x5[1][1]*frame.at(x-1,y-1);
+	   temp += blur_5x5[1][2]*frame.at(x,y-1);
+	   temp += blur_5x5[1][3]*frame.at(x+1,y-1);
+	   temp += blur_5x5[1][4]*frame.at(x+2,y-1);
+	   
+	   temp += blur_5x5[2][0]*frame.at(x-2,y);
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   temp += blur_5x5[2][4]*frame.at(x+2,y);
+	   
+	   temp += blur_5x5[3][0]*frame.at(x-2,y+1);
+	   temp += blur_5x5[3][1]*frame.at(x-1,y+1);
+	   temp += blur_5x5[3][2]*frame.at(x,y+1);
+	   temp += blur_5x5[3][3]*frame.at(x+1,y+1);
+	   temp += blur_5x5[3][4]*frame.at(x+2,y+1);
+	   
+	   temp += blur_5x5[4][0]*frame.at(x-2,y+2);
+	   temp += blur_5x5[4][1]*frame.at(x-1,y+2);
+	   temp += blur_5x5[4][2]*frame.at(x,y+2);
+	   temp += blur_5x5[4][3]*frame.at(x+1,y+2);
+	   temp += blur_5x5[4][4]*frame.at(x+2,y+2);	   
+	   
+  //         printf("(y,x)=%d | div=%f | ==%f\n", temp, div, temp/div);
+
+	   temp = round(temp/div);
+  //         printf("(y,x)=%d\n", temp);
+	   convolved.at(x,y) = temp;
+	 }
+       }
+
+       // Border rows
+       // 1st and 2nd, last and befLast rows without corners
+       for(int x=2; x<frame.width-2; x++){
+	   int y;
+
+	   y = 0;
+	   temp = 0;
+	   
+	   temp += blur_5x5[2][0]*frame.at(x-2,y);
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   temp += blur_5x5[2][4]*frame.at(x+2,y);
+	   
+	   temp += blur_5x5[3][0]*frame.at(x-2,y+1);
+	   temp += blur_5x5[3][1]*frame.at(x-1,y+1);
+	   temp += blur_5x5[3][2]*frame.at(x  ,y+1);
+	   temp += blur_5x5[3][3]*frame.at(x+1,y+1);
+	   temp += blur_5x5[3][4]*frame.at(x+2,y+1);
+	   
+	   temp += blur_5x5[4][0]*frame.at(x-2,y+2);
+	   temp += blur_5x5[4][1]*frame.at(x-1,y+2);
+	   temp += blur_5x5[4][2]*frame.at(x  ,y+2);
+	   temp += blur_5x5[4][3]*frame.at(x+1,y+2);
+	   temp += blur_5x5[4][4]*frame.at(x+2,y+2);
+
+	   temp = round(temp/div_firstLast);
+	   convolved.at(x,y) = temp;
+	   
+	   y = 1;
+	   temp = 0;
+	   
+	   temp += blur_5x5[1][0]*frame.at(x-2,y-1);
+	   temp += blur_5x5[1][1]*frame.at(x-1,y-1);
+	   temp += blur_5x5[1][2]*frame.at(x  ,y-1);
+	   temp += blur_5x5[1][3]*frame.at(x+1,y-1);
+	   temp += blur_5x5[1][4]*frame.at(x+2,y-1);
+	   
+	   temp += blur_5x5[2][0]*frame.at(x-2,y);
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   temp += blur_5x5[2][4]*frame.at(x+2,y);
+	   
+	   temp += blur_5x5[3][0]*frame.at(x-2,y+1);
+	   temp += blur_5x5[3][1]*frame.at(x-1,y+1);
+	   temp += blur_5x5[3][2]*frame.at(x  ,y+1);
+	   temp += blur_5x5[3][3]*frame.at(x+1,y+1);
+	   temp += blur_5x5[3][4]*frame.at(x+2,y+1);
+	   
+	   temp += blur_5x5[4][0]*frame.at(x-2,y+2);
+	   temp += blur_5x5[4][1]*frame.at(x-1,y+2);
+	   temp += blur_5x5[4][2]*frame.at(x  ,y+2);
+	   temp += blur_5x5[4][3]*frame.at(x+1,y+2);
+	   temp += blur_5x5[4][4]*frame.at(x+2,y+2);
+
+	   temp = round(temp/div_befFirstLast);
+	   convolved.at(x,y) = temp;
+
+	   y = frame.height-2;
+
+	   temp = 0;
+	   
+	   temp += blur_5x5[0][0]*frame.at(x-2,y-2);
+	   temp += blur_5x5[0][1]*frame.at(x-1,y-2);
+	   temp += blur_5x5[0][2]*frame.at(x  ,y-2);
+	   temp += blur_5x5[0][3]*frame.at(x+1,y-2);
+	   temp += blur_5x5[0][4]*frame.at(x+2,y-2);
+	   
+	   temp += blur_5x5[1][0]*frame.at(x-2,y-1);
+	   temp += blur_5x5[1][1]*frame.at(x-1,y-1);
+	   temp += blur_5x5[1][2]*frame.at(x  ,y-1);
+	   temp += blur_5x5[1][3]*frame.at(x+1,y-1);
+	   temp += blur_5x5[1][4]*frame.at(x+2,y-1);
+	   
+	   temp += blur_5x5[2][0]*frame.at(x-2,y);
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   temp += blur_5x5[2][4]*frame.at(x+2,y);
+	   
+	   temp += blur_5x5[3][0]*frame.at(x-2,y+1);
+	   temp += blur_5x5[3][1]*frame.at(x-1,y+1);
+	   temp += blur_5x5[3][2]*frame.at(x  ,y+1);
+	   temp += blur_5x5[3][3]*frame.at(x+1,y+1);
+	   temp += blur_5x5[3][4]*frame.at(x+2,y+1);  
+
+	   temp = round(temp/div_befFirstLast);
+	   convolved.at(x,y) = temp;
+	   
+	   y = frame.height-1;
+
+	   temp = 0;
+	   
+	   temp += blur_5x5[0][0]*frame.at(x-2,y-2);
+	   temp += blur_5x5[0][1]*frame.at(x-1,y-2);
+	   temp += blur_5x5[0][2]*frame.at(x  ,y-2);
+	   temp += blur_5x5[0][3]*frame.at(x+1,y-2);
+	   temp += blur_5x5[0][4]*frame.at(x+2,y-2);
+	   
+	   temp += blur_5x5[1][0]*frame.at(x-2,y-1);
+	   temp += blur_5x5[1][1]*frame.at(x-1,y-1);
+	   temp += blur_5x5[1][2]*frame.at(x  ,y-1);
+	   temp += blur_5x5[1][3]*frame.at(x+1,y-1);
+	   temp += blur_5x5[1][4]*frame.at(x+2,y-1);
+	   
+	   temp += blur_5x5[2][0]*frame.at(x-2,y);
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   temp += blur_5x5[2][4]*frame.at(x+2,y);
+	   
+	   temp = round(temp/div_firstLast);
+	   convolved.at(x,y) = temp;
+       }
+       
+       
+       // Border columns
+       // 1st and 2nd, last and befLast columns without corners
+       for(int y=2; y<frame.height-2; y++){
+	   int x;
+
+	   x = 0;
+	   temp = 0;
+	   
+	   temp += blur_5x5[0][2]*frame.at(x  ,y-2);
+	   temp += blur_5x5[0][3]*frame.at(x+1,y-2);
+	   temp += blur_5x5[0][4]*frame.at(x+2,y-2);	   
+	   
+	   temp += blur_5x5[1][2]*frame.at(x  ,y-1);
+	   temp += blur_5x5[1][3]*frame.at(x+1,y-1);
+	   temp += blur_5x5[1][4]*frame.at(x+2,y-1);	   
+
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   temp += blur_5x5[2][4]*frame.at(x+2,y);	   	   
+	   
+	   temp += blur_5x5[3][2]*frame.at(x  ,y+1);
+	   temp += blur_5x5[3][3]*frame.at(x+1,y+1);
+	   temp += blur_5x5[3][4]*frame.at(x+2,y+1);	   	   
+	   
+	   temp += blur_5x5[4][2]*frame.at(x  ,y+2);
+	   temp += blur_5x5[4][3]*frame.at(x+1,y+2);
+	   temp += blur_5x5[4][4]*frame.at(x+2,y+2);	 
+	   
+	   temp = round(temp/div_firstLast);
+	   convolved.at(x,y) = temp;
+	   
+	   x = 1;
+	   temp = 0;
+	   
+	   temp += blur_5x5[0][1]*frame.at(x-1,y-2);
+	   temp += blur_5x5[0][2]*frame.at(x  ,y-2);
+	   temp += blur_5x5[0][3]*frame.at(x+1,y-2);
+	   temp += blur_5x5[0][4]*frame.at(x+2,y-2);	   
+	   
+	   temp += blur_5x5[1][1]*frame.at(x-1,y-1);
+	   temp += blur_5x5[1][2]*frame.at(x  ,y-1);
+	   temp += blur_5x5[1][3]*frame.at(x+1,y-1);
+	   temp += blur_5x5[1][4]*frame.at(x+2,y-1);	   
+
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   temp += blur_5x5[2][4]*frame.at(x+2,y);	   	   
+	   
+	   temp += blur_5x5[3][1]*frame.at(x-1,y+1);
+	   temp += blur_5x5[3][2]*frame.at(x  ,y+1);
+	   temp += blur_5x5[3][3]*frame.at(x+1,y+1);
+	   temp += blur_5x5[3][4]*frame.at(x+2,y+1);	   	   
+	   
+	   temp += blur_5x5[4][1]*frame.at(x-1,y+2);
+	   temp += blur_5x5[4][2]*frame.at(x  ,y+2);
+	   temp += blur_5x5[4][3]*frame.at(x+1,y+2);
+	   temp += blur_5x5[4][4]*frame.at(x+2,y+2);	 
+	   
+	   temp = round(temp/div_befFirstLast);
+	   convolved.at(x,y) = temp;
+
+	   x = frame.width-2;
+	   temp = 0;
+	   
+	   temp += blur_5x5[0][0]*frame.at(x-2,y-2);	   
+	   temp += blur_5x5[0][1]*frame.at(x-1,y-2);
+	   temp += blur_5x5[0][2]*frame.at(x  ,y-2);
+	   temp += blur_5x5[0][3]*frame.at(x+1,y-2);
+	   
+	   temp += blur_5x5[1][0]*frame.at(x-2,y-1);	   
+	   temp += blur_5x5[1][1]*frame.at(x-1,y-1);
+	   temp += blur_5x5[1][2]*frame.at(x  ,y-1);
+	   temp += blur_5x5[1][3]*frame.at(x+1,y-1);
+	   
+	   temp += blur_5x5[2][0]*frame.at(x-2,y);	   
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   temp += blur_5x5[2][3]*frame.at(x+1,y);
+	   
+	   temp += blur_5x5[3][0]*frame.at(x-2,y+1);	   
+	   temp += blur_5x5[3][1]*frame.at(x-1,y+1);
+	   temp += blur_5x5[3][2]*frame.at(x  ,y+1);
+	   temp += blur_5x5[3][3]*frame.at(x+1,y+1);
+	   
+	   temp += blur_5x5[4][0]*frame.at(x-2,y+2);	   
+	   temp += blur_5x5[4][1]*frame.at(x-1,y+2);
+	   temp += blur_5x5[4][2]*frame.at(x  ,y+2);
+	   temp += blur_5x5[4][3]*frame.at(x+1,y+2);
+	   
+	   temp = round(temp/div_befFirstLast);
+	   convolved.at(x,y) = temp;
+	   
+	   x = frame.width-1;
+	   temp = 0;
+	   
+	   temp += blur_5x5[0][0]*frame.at(x-2,y-2);	   
+	   temp += blur_5x5[0][1]*frame.at(x-1,y-2);
+	   temp += blur_5x5[0][2]*frame.at(x  ,y-2);
+	   
+	   temp += blur_5x5[1][0]*frame.at(x-2,y-1);	   
+	   temp += blur_5x5[1][1]*frame.at(x-1,y-1);
+	   temp += blur_5x5[1][2]*frame.at(x  ,y-1);
+	   
+	   temp += blur_5x5[2][0]*frame.at(x-2,y);	   
+	   temp += blur_5x5[2][1]*frame.at(x-1,y);
+	   temp += blur_5x5[2][2]*frame.at(x  ,y);
+	   
+	   temp += blur_5x5[3][0]*frame.at(x-2,y+1);	   
+	   temp += blur_5x5[3][1]*frame.at(x-1,y+1);
+	   temp += blur_5x5[3][2]*frame.at(x  ,y+1);
+	   
+	   temp += blur_5x5[4][0]*frame.at(x-2,y+2);	   
+	   temp += blur_5x5[4][1]*frame.at(x-1,y+2);
+	   temp += blur_5x5[4][2]*frame.at(x  ,y+2);
+	   
+	   temp = round(temp/div_firstLast);
+	   convolved.at(x,y) = temp;
+	   	   
+       }
+       
+       // Corners
+       int x, y;
+       float currDiv;
+       
+       
+    int kx0, kx1, ky0, ky1;
+
+    // (0,0) Top-Left
+    x = 0;
+    y = 0;
+    kx0 = 0;
+    kx1 = 2;
+    ky0 = 0;
+    ky1 = 2;
+    
+    currDiv= 0.0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+    
+    
+    // (0,1) Top-Left+1
+    x = 1;
+    y = 0;
+    kx0 = -1;
+    kx1 = 2;
+    ky0 = 0;
+    ky1 = 2;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;    
+    
+    // (0,w-1) Top-Right-1
+    x = frame.width-2;
+    y = 0;
+    kx0 = -2;
+    kx1 = 1;
+    ky0 = 0;
+    ky1 = 2;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+    
+    
+    // (0,w) Top-Right
+    x = frame.width-1;
+    y = 0;
+    kx0 = -2;
+    kx1 = 0;
+    ky0 = 0;
+    ky1 = 2;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+    
+    // (1,0) Top+1-Left
+    x = 0;
+    y = 1;
+    kx0 = 0;
+    kx1 = 2;
+    ky0 = -1;
+    ky1 = 2;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+    
+    // (1,1) Top+1-Left+1
+    x = 1;
+    y = 1;
+    kx0 = -1;
+    kx1 = 2;
+    ky0 = -1;
+    ky1 = 2;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;   
+    
+    // (1,w-1) Top+1-Right-1
+    x = frame.width-2;
+    y = 1;
+    kx0 = -2;
+    kx1 = 1;
+    ky0 = -1;
+    ky1 = 2;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;  
+    
+    // (1,w) Top+1-Right
+    x = frame.width-1;
+    y = 1;
+    kx0 = -2;
+    kx1 = 0;
+    ky0 = -1;
+    ky1 = 2;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+    
+    // (h-1,0) Bottom-1-Left
+    x = 0;
+    y = frame.height-2;
+    kx0 = 0;
+    kx1 = 2;
+    ky0 = -2;
+    ky1 = 1;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+    
+    // (h-1,1) Bottom-1-Left+1
+    x = 1;
+    y = frame.height-2;
+    kx0 = -1;
+    kx1 = 2;
+    ky0 = -2;
+    ky1 = 1;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+    
+
+    // (h-1,w-1) Bottom-1-Right-1
+    x = frame.width-2;
+    y = frame.height-2;
+    kx0 = -2;
+    kx1 = 1;
+    ky0 = -2;
+    ky1 = 1;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;    
+    
+    
+    // (h-1,w) Bottom-1-Right
+    x = frame.width-1;
+    y = frame.height-2;
+    kx0 = -2;
+    kx1 = 0;
+    ky0 = -2;
+    ky1 = 1;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;
+
+    // (h,0) Bottom-Left
+    x = 0;
+    y = frame.height - 1;
+    kx0 = 0;
+    kx1 = 2;
+    ky0 = -2;
+    ky1 = 0;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;      
+    
+    // (h,1) Bottom-Left+1
+    x = 1;
+    y = frame.height-1;
+    kx0 = -1;
+    kx1 = 2;
+    ky0 = -2;
+    ky1 = 0;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;    
+    
+    // (h,w-1) Bottom-Right-1
+    x = frame.width - 2;
+    y = frame.height - 1;
+    kx0 = -2;
+    kx1 = 1;
+    ky0 = -2;
+    ky1 = 0;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;         
+
+    // (h,w) Bottom-Right
+    x = frame.width - 1;
+    y = frame.height - 1;
+    kx0 = -2;
+    kx1 = 0;
+    ky0 = -2;
+    ky1 = 0;
+    
+    currDiv= 0;
+    temp = 0;
+    for(int i=ky0; i<=ky1; i++){
+      for(int j=kx0; j<=kx1; j++){
+	currDiv += blur_5x5[2+i][2+j];
+	temp += blur_5x5[2+i][2+j]*frame.at(x+j, y+i);
+      }
+    }
+    temp = round(temp/currDiv);
+    convolved.at(x,y) = temp;    
+	
+   }
+   return convolved;
+ }
+
+void storch::initializeFrameArray(Picture* pcPic){
+  storch::frameWidth = pcPic->getPicWidthInLumaSamples();
+  storch::frameHeight = pcPic->getPicHeightInLumaSamples();
+  
+  storch::reconstructedFrame = (Pel*) malloc(sizeof(Pel) * storch::frameWidth*storch::frameHeight);
+  storch::predictedFrame = (Pel*) malloc(sizeof(Pel) * storch::frameWidth*storch::frameHeight);
+  storch::isInitialized = 1;
 }

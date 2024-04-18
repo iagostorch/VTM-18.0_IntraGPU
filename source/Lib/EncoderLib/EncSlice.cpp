@@ -1488,6 +1488,21 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
     PelBuf originalFrame = pcSlice->getPic()->getOrigBuf(COMPONENT_Y);
     PelBuf trueOriginalFrame = pcSlice->getPic()->getTrueOrigBuf(COMPONENT_Y);
     
+
+    
+    // Malloc space for predicted and reconstructed frames
+    if(!storch::isInitialized){
+      storch::initializeFrameArray(pcPic);
+    }
+    
+    // Select smoothing filter and extract smoothed frame
+    if(CONVOLVED_SAMPLES_INTRA) {
+      PelBuf filtered = storch::convolveFrameKernel_v2(originalFrame, BLUR_3x3_v0);
+            
+      storch::storeConvBuf(pcPic, filtered);
+      storch::exportSamplesFrame(filtered, currPOC, EXT_CONVOLVED_KERNEL);
+    }
+    
     // Extract the current frame
     storch::exportSamplesFrame(originalFrame, currPOC, EXT_ORIGINAL);
     storch::exportSamplesFrame(trueOriginalFrame, currPOC, EXT_TRUE_ORIGINAL);
@@ -1598,6 +1613,9 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
     
     storch::exportSamplesFrame(predictedFrame, currPOC, EXT_PREDICTED);
   }
+  
+  storch::storePredBuf_2(pcPic);
+    
 }
 
 void EncSlice::checkDisFracMmvd( Picture* pcPic, uint32_t startCtuTsAddr, uint32_t boundingCtuTsAddr )

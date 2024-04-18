@@ -1121,8 +1121,10 @@ enum RESHAPE_SIGNAL_TYPE
 enum FrameIntra
 {
     PREV_REC    = 0,
-    CURR_ORIG   = 1,
-    CURR_REC    = 2
+    PREV_PRED   = 1,
+    CURR_ORIG   = 2,
+    CURR_REC    = 3,
+    CONV_ORIG   = 4
 };
 
 

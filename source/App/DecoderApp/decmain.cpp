@@ -41,6 +41,9 @@
 #include "DecApp.h"
 #include "program_options_lite.h"
 
+#include "../../Lib/CommonLib/storchmain.h"
+
+
 using namespace std;
 
 //! \ingroup DecoderApp

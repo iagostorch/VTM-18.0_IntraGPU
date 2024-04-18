@@ -730,6 +730,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   storch::traceCall = TRACE_estIntraPredLumaQT;
   storch::traceCall &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
   storch::traceCall &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));
+  storch::traceCall &= (!TRACE_singleCuSize || (TRACE_singleCuSize && cs.area.lwidth()==TRACE_targetCuWidth && cs.area.lheight()==TRACE_targetCuHeight));
   
   if( storch::traceCall ){
     if(TRACE_estIntraPredLumaQT){
@@ -748,7 +749,16 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   //    
   //    printf("|||");
 
-      printf("MTS=%d, testISP=%d,saveDataForISP=%d,lfnstSaveFlag=%d,lfnstLoadFlag=%d\n", mtsUsageFlag, testISP, saveDataForISP, lfnstSaveFlag, lfnstLoadFlag);
+      printf("MTS=%d, testISP=%d,saveDataForISP=%d,lfnstSaveFlag=%d,lfnstLoadFlag=%d", mtsUsageFlag, testISP, saveDataForISP, lfnstSaveFlag, lfnstLoadFlag);
+
+      // When mtsUsage==2 we don't initialize the reference samples
+      if(TRACE_fineGrainedNeighborAvailability && mtsUsageFlag==2)
+	printf("\n");
+      else if(TRACE_fineGrainedNeighborAvailability)
+	printf(",");
+      else
+	printf("\n");
+
     }
   }
   
@@ -801,6 +811,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       
       double e0_total, e1_total;
       double e0_core, e1_core;
+      double e0_pkg, e1_pkg;
 #endif
 
       
@@ -808,7 +819,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
       storch::startIntraRmdGeneral();
       if (mtsUsageFlag != 2)
       {
-        // Extract the predicted samples during MIP
+	// Extract the predicted samples during MIP
         int ctuX, ctuY;
         // Get coordinates of current CTU
         ctuX = (cu.lx()>>7)<<7;
@@ -818,12 +829,16 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         int cuSizeId = storch::getSizeId(cuSize);
 
         // Verify if current block is eligible for tracing (size and position)
-        int traceBlock = 1;
+
+	int traceBlock = 1;
+	
         traceBlock &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
         traceBlock &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));             
-
+	
+	traceBlock &= (!TRACE_singleCuSize || (TRACE_singleCuSize && TRACE_targetCuWidth==cu.lwidth() && TRACE_targetCuHeight==cu.lheight()));             
+	
         storch::targetBlock = traceBlock;
-        
+	
         // this should always be true
         CHECK(!pu.Y().valid(), "PU is not valid");
         bool isFirstLineOfCtu     = (((pu.block(COMPONENT_Y).y) & ((pu.cs->sps)->getMaxCUWidth() - 1)) == 0);
@@ -884,13 +899,19 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
           //===== init pattern for luma prediction =====
          
-          // Fetch the reference samples that will be used for reduced and expanded angular intra pred (modes from HEVC and then new ones from VVC)
-          if(ALTERNATIVE_REF_ANGULAR && TEMPORAL_INTRA){
+          // Fetch the reference samples that will be used for reduced and expanded angular intra pred (modes from HEVC and then new ones from VVC)    
+	  if(ALTERNATIVE_REF_ANGULAR && TEMPORAL_INTRA){
             initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
           }
+	  else if(ALTERNATIVE_REF_ANGULAR && TEMPORAL_PRED){
+	    initIntraPatternChType(cu, pu.Y(), PREV_PRED, true);
+	  }
           else if(ALTERNATIVE_REF_ANGULAR && ORIG_SAMPLES_INTRA){
             initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
           }
+	  else if(ALTERNATIVE_REF_ANGULAR && CONVOLVED_SAMPLES_INTRA){
+	    initIntraPatternChType(cu, pu.Y(), CONV_ORIG, true);
+	  }
           else{
             initIntraPatternChType(cu, pu.Y(), CURR_REC, true);
           }
@@ -919,13 +940,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               satdChecked[mode] = true;
 
               pu.intraDir[0] = modeIdx;
-
+      
               initPredIntraParams(pu, pu.Y(), sps);
               predIntraAng(COMPONENT_Y, piPred, pu);
               // Use the min between SAD and HAD as the cost criterion
               // SAD is scaled by 2 to align with the scaling of HAD
               minSadHad += std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad.distFunc(distParamHad));              
-                            
+                            	      
               // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
               m_CABACEstimator->getCtx() = SubCtx( Ctx::MipFlag, ctxStartMipFlag );
               m_CABACEstimator->getCtx() = SubCtx( Ctx::ISPMode, ctxStartIspMode );
@@ -1074,6 +1095,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
             }
             // Probe RMD_2 end
             storch::finishIntraRmdPart2();
+	    
             if (saveDataForISP)
             {
               // we save the regular intra modes list
@@ -1093,14 +1115,20 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
               pu.multiRefIdx = multiRefIdx;
               {
-                
-                // Fetch reference samples again. Now they are used for MRL
+
+		// Fetch reference samples again. Now they are used for MRL
                 if(ALTERNATIVE_REF_MRL && TEMPORAL_INTRA){
                   initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
+                }
+		else if(ALTERNATIVE_REF_MRL && TEMPORAL_PRED){
+                  initIntraPatternChType(cu, pu.Y(), PREV_PRED, true);
                 }
                 else if(ALTERNATIVE_REF_MRL && ORIG_SAMPLES_INTRA){
                   initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
                 }
+		else if(ALTERNATIVE_REF_MRL && CONVOLVED_SAMPLES_INTRA){
+		  initIntraPatternChType(cu, pu.Y(), CONV_ORIG, true);
+		}
                 else{
                   initIntraPatternChType(cu, pu.Y(), CURR_REC, true);
                 }
@@ -1190,6 +1218,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 #if TRACE_energy            
             e0_total = rapl_monitor_report();
             e0_core = rapl_monitor_report_core();
+	    e0_pkg = rapl_monitor_report_pkg();
 #endif
             //*** Derive MIP candidates using Hadamard
             if (testMip && !supportedMipBlkSize)
@@ -1214,15 +1243,21 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
               double mipHadCost[MAX_NUM_MIP_MODE] = { MAX_DOUBLE };
 
-              
+
               // At this point the reference samples are derived
               // Fetch the reference samples that will be used in MIP
               if(ALTERNATIVE_REF_MIP && TEMPORAL_INTRA){
                 initIntraPatternChType(cu, pu.Y(), PREV_REC);
               } 
+	      else if(ALTERNATIVE_REF_MIP && TEMPORAL_PRED){
+                initIntraPatternChType(cu, pu.Y(), PREV_PRED);
+              } 
               else if(ALTERNATIVE_REF_MIP && ORIG_SAMPLES_INTRA){
                 initIntraPatternChType(cu, pu.Y(), CURR_ORIG);
               }
+	      else if(ALTERNATIVE_REF_MIP && CONVOLVED_SAMPLES_INTRA){
+		initIntraPatternChType(cu, pu.Y(), CONV_ORIG);
+	      }	      
               else{
                 initIntraPatternChType(cu, pu.Y(), CURR_REC);
               }
@@ -1343,9 +1378,11 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 #if TRACE_energy            
             e1_total = rapl_monitor_report();
             e1_core = rapl_monitor_report_core();
+	    e1_pkg = rapl_monitor_report_pkg();
             //cout << "MIP RMD Energy consumed: " << (e1_total - e0_total) << " joules\n";
             storch::incEnergy_total(e1_total-e0_total);
             storch::incEnergy_core(e1_core-e0_core);
+	    storch::incEnergy_pkg(e1_pkg-e0_pkg);
 #endif
             storch::finishIntraRmdMip(pu.lwidth(), pu.lheight());            
 
@@ -1618,6 +1655,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
     if((TRACE_boundaries || TRACE_predictionProgress || TRACE_distortion) && storch::targetBlock){
       printf(".. >> Going into RDO with %d MODES\n", (int) rdModeList.size());
+      storch::targetBlock = 0;
     }
     
     // ISP modes are only tested in RDO
@@ -1715,9 +1753,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
         storch::finishIntraRdoIsp();
       }
       else
-      {
+      { 
         if (cu.colorTransform)
-        {
+        {  
           tmpValidReturn = xRecurIntraCodingACTQT(*csTemp, partitioner, mtsCheckRangeFlag, mtsFirstCheckId, mtsLastCheckId, moreProbMTSIdxFirst);
         }
         else
@@ -3713,7 +3751,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID &comp
       else
       {
        // Initialization for RDO. Since we are not implementign transform/quantization/entropy yet it makes no sense to change the reference samples during RDO
-        initIntraPatternChType(*tu.cu, area, CURR_REC);
+	initIntraPatternChType(*tu.cu, area, CURR_REC);
       }
 
       //===== get prediction signal =====

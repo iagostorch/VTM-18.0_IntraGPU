@@ -231,7 +231,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf &piPred, co
   const int srcStride  = m_refBufferStride[compID];
   const int srcHStride = 2;
 
-  const CPelBuf & srcBuf = CPelBuf(getPredictorPtr(compID), srcStride, srcHStride);
+  const CPelBuf & srcBuf = CPelBuf(getPredictorPtr(compID), srcStride, srcHStride);  
   const ClpRng& clpRng(pu.cu->cs->slice->clpRng(compID));
 
   switch (dirMode)
@@ -240,7 +240,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf &piPred, co
     case(DC_IDX):     xPredIntraDc(srcBuf, piPred, channelType, false); break;
     case(BDPCM_IDX):  xPredIntraBDPCM(srcBuf, piPred, isLuma(compID) ? pu.cu->bdpcmMode : pu.cu->bdpcmModeChroma, clpRng); break;
     default:          xPredIntraAng(srcBuf, piPred, channelType, clpRng); break;
-  }
+  }  
 
   if (m_ipaParam.applyPDPC)
   {
@@ -370,6 +370,7 @@ void IntraPrediction::initPredIntraParams(const PredictionUnit & pu, const CompA
   const Size  puSize    = Size(area.width, area.height);
   const Size &blockSize = useISP ? cuSize : puSize;
   const int   dirMode   = PU::getFinalIntraMode(pu, chType);
+  // The output of getModifiedWideAngle can be a number greater than 66 or smaller than 0 because of the WAIP
   const int   predMode  = getModifiedWideAngle(blockSize.width, blockSize.height, dirMode);
 
   m_ipaParam.isModeVer         = predMode >= DIA_IDX;
@@ -379,6 +380,7 @@ void IntraPrediction::initPredIntraParams(const PredictionUnit & pu, const CompA
   m_ipaParam.applyPDPC =
     (puSize.width >= MIN_TB_SIZEY && puSize.height >= MIN_TB_SIZEY) && m_ipaParam.multiRefIndex == 0;
 
+  // For square blocks, this maps the predAngle into [-16,16] or [-16,15] as an offset from VER_IDX or HOR_IDX
   const int intraPredAngleMode = (m_ipaParam.isModeVer) ? predMode - VER_IDX : -(predMode - HOR_IDX);
 
   int absAng = 0;
@@ -464,6 +466,9 @@ void IntraPrediction::xPredIntraAng( const CPelBuf &pSrc, PelBuf &pDst, const Ch
   Pel* refMain;
   Pel* refSide;
 
+  // [!!!]    PROBABLY
+  // The 2 * MAX_CU_SIZE + 3 comprehends all prediction modes for square blocks
+  // And the remaining 33 * MAX_REF_LINE_DX are used for WAIP
   Pel  refAbove[2 * MAX_CU_SIZE + 3 + 33 * MAX_REF_LINE_IDX];
   Pel  refLeft [2 * MAX_CU_SIZE + 3 + 33 * MAX_REF_LINE_IDX];
 
@@ -490,6 +495,7 @@ void IntraPrediction::xPredIntraAng( const CPelBuf &pSrc, PelBuf &pDst, const Ch
   }
   else
   {
+    // Top-left plus the complete top or left samples (2*W or 2*H)
     for (int x = 0; x <= m_topRefLength + multiRefIdx; x++)
     {
       refAbove[x] = pSrc.at(x, 0);
@@ -528,9 +534,9 @@ void IntraPrediction::xPredIntraAng( const CPelBuf &pSrc, PelBuf &pDst, const Ch
   refSide += multiRefIdx;
 
   Pel *pDsty = pDstBuf;
-
+  
   if( intraPredAngle == 0 )  // pure vertical or pure horizontal
-  {
+  {     
     for( int y = 0; y < height; y++ )
     {
       for( int x = 0; x < width; x++ )
@@ -560,7 +566,7 @@ void IntraPrediction::xPredIntraAng( const CPelBuf &pSrc, PelBuf &pDst, const Ch
     {
       const int deltaInt   = deltaPos >> 5;
       const int deltaFract = deltaPos & 31;
-
+      
       if ( !isIntegerSlope( abs(intraPredAngle) ) )
       {
         if( isLuma(channelType) )
@@ -798,16 +804,24 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   
   
   if(frame == CURR_ORIG){ // Reference samples are the original samples of current frame
-    // O problema pode estar aqui. O video reconstruído tem 10 bits e o original pode ter 8 bits
     xFillReferenceSamples( cs.picture->getOrigBuf( area ), refBufUnfiltered, area, cu );
+  }
+  else if(frame==CONV_ORIG){
+    PelStorage x = storch::loadConvBuf(); // Fetch the original samples convolved with a kernel
+    xFillReferenceSamples( x.getBuf(area), refBufUnfiltered, area, cu );
+    
   }
   else if((cs.picture->poc==0) || (frame==CURR_REC)){ // Normal reference samples
     xFillReferenceSamples( cs.picture->getRecoBuf( area ), refBufUnfiltered, area, cu );
   }
-  else if(frame==PREV_REC){ // Reference samples from the previous frame
-    PelStorage x = storch::loadRecBuf(); // Fetch the samples from previous frame (store in storchmain)
+  else if(frame==PREV_REC){ // Reference samples from the reconstructed previous frame (AFTER FILTER)
+    PelStorage x = storch::loadRecBuf(); // Fetch the samples from previous frame (stored in storchmain)
     xFillReferenceSamples( x.getBuf(area), refBufUnfiltered, area, cu );
   }
+  else if(frame==PREV_PRED){ // Reference samples from the predicted previous frame (BEFORE FILTER)
+    PelStorage x = storch::loadPredBuf(); // Fetch the samples from previous frame (stored in storchmain)
+    xFillReferenceSamples( x.getBuf(area), refBufUnfiltered, area, cu );
+  }  
   else{
     printf("ERROR -- Incorrect frame when fetching reference samples for intra predictin\n");
     exit(0);
@@ -858,6 +872,7 @@ void IntraPrediction::initIntraPatternChTypeISP(const CodingUnit& cu, const Comp
       m_topRefLength = cu.Y().width << 1;
     }
 
+//    printf("InitISP\n");
     xFillReferenceSamples(cs.picture->getRecoBuf(cu.Y()), refBufUnfiltered, cu.Y(), cu);
 
     // After having retrieved all the CU reference samples, the number of reference samples is now adjusted for the current subpartition
@@ -945,7 +960,7 @@ void IntraPrediction::initIntraPatternChTypeISP(const CodingUnit& cu, const Comp
   }
 }
 
-void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBufUnfiltered, const CompArea &area, const CodingUnit &cu )
+void IntraPrediction::xFillReferenceSamples(const CPelBuf &recoBuf, Pel* refBufUnfiltered, const CompArea &area, const CodingUnit &cu)
 {
   const ChannelType      chType = toChannelType( area.compID );
   const CodingStructure &cs     = *cu.cs;
@@ -1003,9 +1018,6 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
   
   if(TRACE_estIntraPredLumaQT && TRACE_fineGrainedNeighborAvailability && storch::targetBlock)
   {
-    storch::target_availability = 1;
-    if (storch::target_availability)
-      printf("[!!!] SET AVAILABILITY\n");
     
     int aboveLeft = isAboveLeftAvailable( cu, chType, posLT );
     int above = isAboveAvailable     ( cu, chType, posLT, numAboveUnits,      unitWidth,  (neighborFlags + totalLeftUnits + 1) );
@@ -1013,6 +1025,8 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf &recoBuf, Pel* refBuf
     int aboveRight = isAboveRightAvailable( cu, chType, posRT, numAboveRightUnits, unitWidth,  (neighborFlags + totalLeftUnits + 1 + numAboveUnits) );
     int belowLeft = isBelowLeftAvailable ( cu, chType, posLB, numLeftBelowUnits,  unitHeight, (neighborFlags + totalLeftUnits - 1 - numLeftUnits) );
     storch::target_availability = 0;
+    
+//    printf("AboveLeft=%d,Above=%d,AboveRight=%d,Left=%d,BelowLeft=%d\n", aboveLeft, above, aboveRight, left, belowLeft);
     
     printf(".... Real Availability results:\n");
     printf(".... | tuWidth _____________ %d\n", tuWidth);
@@ -1284,7 +1298,7 @@ void IntraPrediction::xFilterReferenceSamples(const Pel *refBufUnfiltered, Pel *
   const Pel topLeft =
     (refBufUnfiltered[0] + refBufUnfiltered[1] + refBufUnfiltered[predStride] + refBufUnfiltered[predStride + 1] + 2)
     >> 2;
-
+  
   refBufFiltered[0] = topLeft;
 
   for (int i = 1; i < predSize; i++)

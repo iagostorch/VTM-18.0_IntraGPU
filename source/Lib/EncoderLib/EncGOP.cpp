@@ -3385,7 +3385,17 @@ void EncGOP::compressGOP(int pocLast, int numPicRcvd, PicList &rcListPic, std::l
 
         
         // This is a preliminary reconstructed frame, before the in-loop filtering. This is the reference sued for intra, but inter uses a different reference after filtering
-        storch::storeRecBuf(pcPic);
+        
+
+	
+        
+        
+//	if(EXTRACT_frames){
+//	  int currPOC = pcSlice->getPic()->getPOC();
+//	  PelBuf reconstructedFrameBeforeFilter = pcPic->getRecoBuf(COMPONENT_Y);
+//
+//	  storch::exportSamplesFrame(reconstructedFrameBeforeFilter, currPOC, EXT_BEFORE_FILTER);
+//	}
         
         if(sliceIdx < pcPic->cs->pps->getNumSlicesInPic() - 1)
         {
@@ -3697,11 +3707,14 @@ void EncGOP::compressGOP(int pocLast, int numPicRcvd, PicList &rcListPic, std::l
     }
 
     // At this point the current frame was already filtered and passed by in-loop filters 
+    
+    storch::storeRecBuf_2(pcPic);
+        
     // This is the final reconstructed frame
     if(EXTRACT_frames){
       int currPOC = pcSlice->getPic()->getPOC();
       PelBuf reconstructedFrame = pcSlice->getPic()->getRecoBuf(COMPONENT_Y);
-      
+            
       storch::exportSamplesFrame(reconstructedFrame, currPOC, EXT_RECONSTRUCTED);
     }
         

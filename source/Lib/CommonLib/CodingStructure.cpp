@@ -2439,6 +2439,8 @@ const CodingUnit* CodingStructure::getCURestricted( const Position &pos, const C
   const CodingUnit* cu = getCU( pos, _chType );
   // exists       same slice and tile                  cu precedes curCu in encoding order
   //                                                  (thus, is either from parent CS in RD-search or its index is lower)
+  
+  // By default this is FALSE (--WaveFrontSynchro=0 by default)
   const bool wavefrontsEnabled = curCu.slice->getSPS()->getEntropyCodingSyncEnabledFlag();
   int ctuSizeBit = floorLog2(curCu.cs->sps->getMaxCUWidth());
   int xNbY  = pos.x << getChannelTypeScaleX( _chType, curCu.chromaFormat );

@@ -46,6 +46,7 @@
 
 #if RExt__DECODER_DEBUG_TOOL_STATISTICS
 #include "CommonLib/CodingStatistics.h"
+#include "CommonLib/storchmain.h"
 #endif
 #if K0149_BLOCK_STATISTICS
 #include "CommonLib/ChromaFormat.h"
