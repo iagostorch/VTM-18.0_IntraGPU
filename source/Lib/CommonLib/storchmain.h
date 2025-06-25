@@ -22,6 +22,7 @@
 
 #include "CommonLib/Unit.h"
 #include "Slice.h"
+#include "convCoeffs.h"
 //#include "rapl.h"
 
 // My directives
@@ -32,7 +33,7 @@
 //
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-#define GPU_MIP 1                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
+#define GPU_MIP 0                       // When enabled, the distortion of MIP is computed using HADAMARD 4x4
 
 #define ENABLE_SPLIT_HEURISTICS 1
 
@@ -43,8 +44,8 @@
 #define CONVOLVED_SAMPLES_INTRA 1
 
 // Defines on what encoding stage the alternative references (temporal or orig) will be used
-#define ALTERNATIVE_REF_ANGULAR 0
-#define ALTERNATIVE_REF_MRL 0
+#define ALTERNATIVE_REF_ANGULAR 1
+#define ALTERNATIVE_REF_MRL 1
 #define ALTERNATIVE_REF_MIP 1
 
 
@@ -74,97 +75,52 @@
 
 #define EXTRACT_blockData 0             // Extract block data is NOT FUNCTIONING anymore
 #define EXTRACT_frames 1                // Extract the original, true original, predicted and reconstructed frame
-#define EXTRACT_distortion 1
+#define EXTRACT_distortion 0
 
 using namespace std;
 
-const int blur_3x3_v0[3][3] = {
-  {1,1,1},
-  {1,1,1},
-  {1,1,1}
-};
-
-const int blur_3x3_v1[3][3] = {
-  {1,1,1},
-  {1,3,1},
-  {1,1,1}
-};
-
-const int blur_3x3_v2[3][3] = {
-  {1,1,1},
-  {1,5,1},
-  {1,1,1}
-};
-const int blur_3x3_v3[3][3] = {
-  {1,1,1},
-  {1,2,1},
-  {1,1,1}
-};
-const int blur_3x3_v4[3][3] = {
-  {1,2,1},
-  {2,3,2},
-  {1,2,1}
-};
-const int blur_3x3_v5[3][3] = {
-  {1,2,1},
-  {2,12,2},
-  {1,2,1}
-};
-const int blur_3x3_v6[3][3] = {
-  {1,1,1},
-  {1,8,1},
-  {1,1,1}
-};
-
-const int blur_5x5_v0[5][5] = {
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v1[5][5] = {
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,5,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v2[5][5] = {
-  {1,1,1,1,1},
-  {1,2,2,2,1},
-  {1,2,3,2,1},
-  {1,2,2,2,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v3[5][5] = {
-  {1,1,1,1,1},
-  {1,2,2,2,1},
-  {1,2,5,2,1},
-  {1,2,2,2,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v4[5][5] = {
-  {1,1,1,1,1},
-  {1,3,3,3,1},
-  {1,3,5,3,1},
-  {1,3,3,3,1},
-  {1,1,1,1,1}
-};
 
 typedef enum
 {
+  BLUR_3x3_PseudoG_2,
+  BLUR_3x3_PseudoG_3,
+  BLUR_3x3_PseudoG_4,
+  BLUR_3x3_PseudoG_5,
+  BLUR_3x3_PseudoG_6,
+  BLUR_3x3_PseudoG_7,
+  BLUR_3x3_PseudoG_8,
+  BLUR_3x3_PseudoG_9,
+  BLUR_3x3_PseudoG_10,
+  BLUR_3x3_PseudoG_11,
+  BLUR_3x3_PseudoG_12,
+  BLUR_3x3_PseudoG_13,
+  BLUR_3x3_PseudoG_14,
+      
+  BLUR_3x3_G_20,
+  BLUR_3x3_G_10,
+  BLUR_3x3_G_095,
+  BLUR_3x3_G_090,
+  BLUR_3x3_G_085,
+  BLUR_3x3_G_080,
+  BLUR_3x3_G_075,
+  BLUR_3x3_G_070,
+  BLUR_3x3_G_065,
+  BLUR_3x3_G_060,
+  BLUR_3x3_G_055,
+  BLUR_3x3_G_050,      
+  BLUR_3x3_G_045,
+  BLUR_3x3_G_040,
+  BLUR_3x3_G_035,
+  BLUR_3x3_G_030,           
+
   BLUR_3x3_v0,
   BLUR_3x3_v1,
   BLUR_3x3_v2,
   BLUR_3x3_v3,
   BLUR_3x3_v4,
   BLUR_3x3_v5,
-  BLUR_3x3_v6,        
+  BLUR_3x3_v6,
+
   BLUR_5x5_v0,
   BLUR_5x5_v1,
   BLUR_5x5_v2,
@@ -280,6 +236,9 @@ class storch{
         
         static void initializeFrameArray(Picture* pcPic);
         
+        static void printKernelName(KERNEL kernelSelector);
+        static string translateKernelName(KERNEL kernelSelector);
+
         static bool isInitialized;
 
         static Pel* reconstructedFrame;
@@ -308,6 +267,8 @@ class storch{
         static PelStorage convOrig;
         
         static double totalEnergy_total, totalEnergy_core, totalEnergy_pkg;
+        
+        static string convVariation;
         
 };
 

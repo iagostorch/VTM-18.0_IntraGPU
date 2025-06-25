@@ -41,6 +41,8 @@ double storch::intraRmdMipTime_size[NUM_CU_SIZES], storch::intraRmdMipTime_sizeI
 
 double storch::totalEnergy_total, storch::totalEnergy_core, storch::totalEnergy_pkg;
 
+string storch::convVariation;
+
 PelBuf storch::reconstructedPrev;
 Picture storch::previousPic;
 PelStorage storch::recoBuf, storch::predBuf, storch::convOrig;
@@ -107,6 +109,7 @@ void storch::finishEncoding(){
   printf("TEMPORAL_INTRA:           %d\n", TEMPORAL_INTRA);
   printf("TEMPORAL_PRED :           %d\n", TEMPORAL_PRED);
   printf("CONVOLVED_SAMPLES_INTRA:  %d\n", CONVOLVED_SAMPLES_INTRA);
+cout<<   "CONVOLVED VARIATION:      "<< convVariation << endl;  
   printf("ORIG_SAMPLES_INTRA:       %d\n", ORIG_SAMPLES_INTRA);
   printf("ALTERNATIVE_REF_ANGULAR:  %d\n", ALTERNATIVE_REF_ANGULAR);
   printf("ALTERNATIVE_REF_MRL:      %d\n", ALTERNATIVE_REF_MRL);
@@ -815,14 +818,43 @@ PelBuf storch::convolveFrameKernel_v2(PelBuf frame, KERNEL kernelSelector){
   
   AreaBuf<Pel> convolved(buf, frame.width, frame.width, frame.height);
 
+  
    
-   int temp=0;
-   
+  float temp=0;
+    
    // BLUR_3x3
    if(kernelSelector <= BLUR_3x3_v6)
    {
      
     int blur_3x3[3][3];
+    
+    storch::printKernelName(kernelSelector);
+
+    convVariation = storch::translateKernelName(kernelSelector);
+
+//    if(CONVOLVED_SAMPLES_INTRA) storch::printKernelName(kernelSelector); // printf("CONVOLUTION 3x3 GAUSSIAN 0.5\n");
+
+    
+    // Pseudo GAUSS
+    if(kernelSelector <= BLUR_3x3_PseudoG_14){
+      for(int i=0; i<3; i++){
+	for(int j=0; j<3; j++){
+	  blur_3x3[i][j] = blur_3x3_pseudo_gauss[kernelSelector][i][j];
+	}
+      }
+    }
+    // Integer GAUSS
+    else if(kernelSelector <= BLUR_3x3_G_030){
+      for(int i=0; i<3; i++){
+	for(int j=0; j<3; j++){
+	  blur_3x3[i][j] = blur_3x3_gauss[kernelSelector][i][j];
+	}
+      }
+    }
+    
+    
+
+    
     
     if(kernelSelector==BLUR_3x3_v0){
       
@@ -1722,4 +1754,286 @@ void storch::initializeFrameArray(Picture* pcPic){
   storch::reconstructedFrame = (Pel*) malloc(sizeof(Pel) * storch::frameWidth*storch::frameHeight);
   storch::predictedFrame = (Pel*) malloc(sizeof(Pel) * storch::frameWidth*storch::frameHeight);
   storch::isInitialized = 1;
+}
+
+void storch::printKernelName(KERNEL kernelSelector){
+  switch(kernelSelector){
+    case(BLUR_3x3_PseudoG_2):
+	cout << "BLUR_3x3_PseudoG_2" << endl;
+	break;
+    
+    case(BLUR_3x3_PseudoG_3):
+	cout << "BLUR_3x3_PseudoG_3" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_4):
+	cout << "BLUR_3x3_PseudoG_4" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_5):
+	cout << "BLUR_3x3_PseudoG_5" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_6):
+	cout << "BLUR_3x3_PseudoG_6" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_7):
+	cout << "BLUR_3x3_PseudoG_7" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_8):
+	cout << "BLUR_3x3_PseudoG_8" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_9):
+	cout << "BLUR_3x3_PseudoG_9" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_10):
+	cout << "BLUR_3x3_PseudoG_10" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_11):
+	cout << "BLUR_3x3_PseudoG_11" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_12):
+	cout << "BLUR_3x3_PseudoG_12" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_13):
+	cout << "BLUR_3x3_PseudoG_13" << endl;
+	break;
+    case(BLUR_3x3_PseudoG_14):
+	cout << "BLUR_3x3_PseudoG_14" << endl;
+	break;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    case(BLUR_3x3_G_20):
+	cout << "BLUR_3x3_G_20" << endl;
+	break;
+    case(BLUR_3x3_G_10):
+	cout << "BLUR_3x3_G_10" << endl;
+	break;
+    case(BLUR_3x3_G_095):
+	cout << "BLUR_3x3_G_095" << endl;
+	break;
+    case(BLUR_3x3_G_090):
+	cout << "BLUR_3x3_G_090" << endl;
+	break;
+    case(BLUR_3x3_G_085):
+	cout << "BLUR_3x3_G_085" << endl;
+	break;
+    case(BLUR_3x3_G_080):
+	cout << "BLUR_3x3_G_080" << endl;
+	break;
+    case(BLUR_3x3_G_075):
+	cout << "BLUR_3x3_G_075" << endl;
+	break;
+    case(BLUR_3x3_G_070):
+	cout << "BLUR_3x3_G_070" << endl;
+	break;
+    case(BLUR_3x3_G_065):
+	cout << "BLUR_3x3_G_065" << endl;
+	break;
+    case(BLUR_3x3_G_060):
+	cout << "BLUR_3x3_G_060" << endl;
+	break;
+    case(BLUR_3x3_G_055):
+	cout << "BLUR_3x3_G_055" << endl;
+	break;
+    case(BLUR_3x3_G_050):
+	cout << "BLUR_3x3_G_050" << endl;
+	break;
+    case(BLUR_3x3_G_045):
+	cout << "BLUR_3x3_G_045" << endl;
+	break;
+    case(BLUR_3x3_G_040):
+	cout << "BLUR_3x3_G_040" << endl;
+	break;
+    case(BLUR_3x3_G_035):
+	cout << "BLUR_3x3_G_035" << endl;
+	break;
+    case(BLUR_3x3_G_030)     :
+	cout << "BLUR_3x3_G_030" << endl;
+	break;
+    case(BLUR_3x3_v0):
+	cout << "BLUR_3x3_v0" << endl;
+	break;
+    case(BLUR_3x3_v1):
+	cout << "BLUR_3x3_v1" << endl;
+	break;
+    case(BLUR_3x3_v2):
+	cout << "BLUR_3x3_v2" << endl;
+	break;
+    case(BLUR_3x3_v3):
+	cout << "BLUR_3x3_v3" << endl;
+	break;
+    case(BLUR_3x3_v4):
+	cout << "BLUR_3x3_v4" << endl;
+	break;
+    case(BLUR_3x3_v5):
+	cout << "BLUR_3x3_v5" << endl;
+	break;
+    case(BLUR_3x3_v6):
+	cout << "BLUR_3x3_v6" << endl;
+	break;
+    case(BLUR_5x5_v0):
+	cout << "BLUR_5x5_v0" << endl;
+	break;
+    case(BLUR_5x5_v1):
+	cout << "BLUR_5x5_v1" << endl;
+	break;
+    case(BLUR_5x5_v2):
+	cout << "BLUR_5x5_v2" << endl;
+	break;
+    case(BLUR_5x5_v3):
+	cout << "BLUR_5x5_v3" << endl;
+	break;
+    case(BLUR_5x5_v4):
+	cout << "BLUR_5x5_v4" << endl;
+	break;
+    default:
+      cout << "ERROR IDENTIFYING KERNEL" << endl;
+      break;
+  }
+  
+}
+
+string storch::translateKernelName(KERNEL kernelSelector){
+  switch(kernelSelector){
+    
+    case(BLUR_3x3_PseudoG_2):
+	return "BLUR_3x3_PseudoG_2";
+	break;
+    
+    case(BLUR_3x3_PseudoG_3):
+	return  "BLUR_3x3_PseudoG_3";
+	break;
+    case(BLUR_3x3_PseudoG_4):
+	return  "BLUR_3x3_PseudoG_4" ;
+	break;
+    case(BLUR_3x3_PseudoG_5):
+	return  "BLUR_3x3_PseudoG_5" ;
+	break;
+    case(BLUR_3x3_PseudoG_6):
+	return  "BLUR_3x3_PseudoG_6" ;
+	break;
+    case(BLUR_3x3_PseudoG_7):
+	return  "BLUR_3x3_PseudoG_7" ;
+	break;
+    case(BLUR_3x3_PseudoG_8):
+	return  "BLUR_3x3_PseudoG_8" ;
+	break;
+    case(BLUR_3x3_PseudoG_9):
+	return  "BLUR_3x3_PseudoG_9" ;
+	break;
+    case(BLUR_3x3_PseudoG_10):
+	return  "BLUR_3x3_PseudoG_10";
+	break;
+    case(BLUR_3x3_PseudoG_11):
+	return  "BLUR_3x3_PseudoG_11" ;
+	break;
+    case(BLUR_3x3_PseudoG_12):
+	return  "BLUR_3x3_PseudoG_12" ;
+	break;
+    case(BLUR_3x3_PseudoG_13):
+	return  "BLUR_3x3_PseudoG_13" ;
+	break;
+    case(BLUR_3x3_PseudoG_14):
+	return  "BLUR_3x3_PseudoG_14" ;
+	break;
+    
+    
+    
+    case(BLUR_3x3_G_20):
+	return "BLUR_3x3_G_20";
+	break;
+    case(BLUR_3x3_G_10):
+	return "BLUR_3x3_G_10";
+	break;
+    case(BLUR_3x3_G_095):
+	return "BLUR_3x3_G_095";
+	break;
+    case(BLUR_3x3_G_090):
+	return "BLUR_3x3_G_090";
+	break;
+    case(BLUR_3x3_G_085):
+	return "BLUR_3x3_G_085";
+	break;
+    case(BLUR_3x3_G_080):
+	return "BLUR_3x3_G_080";
+	break;
+    case(BLUR_3x3_G_075):
+	return "BLUR_3x3_G_075";
+	break;
+    case(BLUR_3x3_G_070):
+	return "BLUR_3x3_G_070";
+	break;
+    case(BLUR_3x3_G_065):
+	return "BLUR_3x3_G_065";
+	break;
+    case(BLUR_3x3_G_060):
+	return "BLUR_3x3_G_060";
+	break;
+    case(BLUR_3x3_G_055):
+	return "BLUR_3x3_G_055";
+	break;
+    case(BLUR_3x3_G_050):
+	return "BLUR_3x3_G_050";
+	break;
+    case(BLUR_3x3_G_045):
+	return "BLUR_3x3_G_045";
+	break;
+    case(BLUR_3x3_G_040):
+	return "BLUR_3x3_G_040";
+	break;
+    case(BLUR_3x3_G_035):
+	return "BLUR_3x3_G_035";
+	break;
+    case(BLUR_3x3_G_030)     :
+	return "BLUR_3x3_G_030";
+	break;
+    case(BLUR_3x3_v0):
+	return "BLUR_3x3_v0";
+	break;
+    case(BLUR_3x3_v1):
+	return "BLUR_3x3_v1";
+	break;
+    case(BLUR_3x3_v2):
+	return "BLUR_3x3_v2";
+	break;
+    case(BLUR_3x3_v3):
+	return "BLUR_3x3_v3";
+	break;
+    case(BLUR_3x3_v4):
+	return "BLUR_3x3_v4";
+	break;
+    case(BLUR_3x3_v5):
+	return "BLUR_3x3_v5";
+	break;
+    case(BLUR_3x3_v6):
+	return "BLUR_3x3_v6";
+	break;
+    case(BLUR_5x5_v0):
+	return "BLUR_5x5_v0";
+	break;
+    case(BLUR_5x5_v1):
+	return "BLUR_5x5_v1";
+	break;
+    case(BLUR_5x5_v2):
+	return "BLUR_5x5_v2";
+	break;
+    case(BLUR_5x5_v3):
+	return "BLUR_5x5_v3";
+	break;
+    case(BLUR_5x5_v4):
+	return "BLUR_5x5_v4";
+	break;
+    default:
+      	cout <<  "ERROR IDENTIFYING KERNEL" << endl;
+      	return " ";
+      	break;
+  }
+  
 }

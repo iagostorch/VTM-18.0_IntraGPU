@@ -1482,6 +1482,28 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
 
   Slice* const pcSlice    = pcPic->slices[getSliceSegmentIdx()];
 
+   // Malloc space for predicted and reconstructed frames
+   if(!storch::isInitialized){
+     storch::initializeFrameArray(pcPic);
+   }
+  
+  
+  // Select smoothing filter and extract smoothed frame if necessary
+  if(CONVOLVED_SAMPLES_INTRA) {
+
+    printf("CONVOLVED_SAMPLES_INTRA\n");
+
+    int currPOC = pcSlice->getPic()->getPOC();
+    PelBuf originalFrame = pcSlice->getPic()->getOrigBuf(COMPONENT_Y);
+    PelBuf filtered = storch::convolveFrameKernel_v2(originalFrame, BLUR_3x3_PseudoG_2);
+
+    storch::storeConvBuf(pcPic, filtered);
+    
+    if(EXTRACT_frames)
+      storch::exportSamplesFrame(filtered, currPOC, EXT_CONVOLVED_KERNEL);
+  }
+  
+  
   if(EXTRACT_frames){
     int currPOC = pcSlice->getPic()->getPOC();
     // True original is the input .yuv video, original represents the filtered input samples that are used as "being the original"
@@ -1490,19 +1512,11 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
     
 
     
-    // Malloc space for predicted and reconstructed frames
-    if(!storch::isInitialized){
-      storch::initializeFrameArray(pcPic);
-    }
-    
-    // Select smoothing filter and extract smoothed frame
-    if(CONVOLVED_SAMPLES_INTRA) {
-      PelBuf filtered = storch::convolveFrameKernel_v2(originalFrame, BLUR_3x3_v0);
-            
-      storch::storeConvBuf(pcPic, filtered);
-      storch::exportSamplesFrame(filtered, currPOC, EXT_CONVOLVED_KERNEL);
-    }
-    
+//    // Malloc space for predicted and reconstructed frames
+//    if(!storch::isInitialized){
+//      storch::initializeFrameArray(pcPic);
+//    }
+       
     // Extract the current frame
     storch::exportSamplesFrame(originalFrame, currPOC, EXT_ORIGINAL);
     storch::exportSamplesFrame(trueOriginalFrame, currPOC, EXT_TRUE_ORIGINAL);
@@ -1614,7 +1628,7 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
     storch::exportSamplesFrame(predictedFrame, currPOC, EXT_PREDICTED);
   }
   
-  storch::storePredBuf_2(pcPic);
+//  storch::storePredBuf_2(pcPic);
     
 }
 
