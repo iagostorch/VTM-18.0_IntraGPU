@@ -1489,22 +1489,22 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
   
   
   // Select smoothing filter and extract smoothed frame if necessary
-  if(CONVOLVED_SAMPLES_INTRA) {
+  if(storch::sGPU_alternativeRefType=="CONV") {
 
     printf("CONVOLVED_SAMPLES_INTRA\n");
 
     int currPOC = pcSlice->getPic()->getPOC();
     PelBuf originalFrame = pcSlice->getPic()->getOrigBuf(COMPONENT_Y);
-    PelBuf filtered = storch::convolveFrameKernel_v2(originalFrame, BLUR_3x3_PseudoG_2);
-
+        
+    PelBuf filtered = storch::convolveFrameKernel_v2(originalFrame, storch::filterNameCoeffHash[storch::sGPU_filterType] );
     storch::storeConvBuf(pcPic, filtered);
     
-    if(EXTRACT_frames)
+    if(storch::sEXTRACT_frame)
       storch::exportSamplesFrame(filtered, currPOC, EXT_CONVOLVED_KERNEL);
   }
   
   
-  if(EXTRACT_frames){
+  if(storch::sEXTRACT_frame){
     int currPOC = pcSlice->getPic()->getPOC();
     // True original is the input .yuv video, original represents the filtered input samples that are used as "being the original"
     PelBuf originalFrame = pcSlice->getPic()->getOrigBuf(COMPONENT_Y);
@@ -1621,7 +1621,7 @@ void EncSlice::compressSlice( Picture* pcPic, const bool bCompressEntireSlice, c
   }
   
   // At this point the entire frame was predicted, but it did not pass through in-loop filters yet. This frame will be filtered before producing the final "reconstructed" frame
-  if(EXTRACT_frames){
+  if(storch::sEXTRACT_frame){
     PelBuf predictedFrame = pcSlice->getPic()->getRecoBuf(COMPONENT_Y, false);
     int currPOC = pcSlice->getPic()->getPOC();
     

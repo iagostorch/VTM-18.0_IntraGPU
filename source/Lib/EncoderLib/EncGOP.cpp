@@ -3711,7 +3711,7 @@ void EncGOP::compressGOP(int pocLast, int numPicRcvd, PicList &rcListPic, std::l
     storch::storeRecBuf_2(pcPic);
         
     // This is the final reconstructed frame
-    if(EXTRACT_frames){
+    if(storch::sEXTRACT_frame){
       int currPOC = pcSlice->getPic()->getPOC();
       PelBuf reconstructedFrame = pcSlice->getPic()->getRecoBuf(COMPONENT_Y);
             

@@ -727,13 +727,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
   CuSize cuSize = storch::translateCuSize(cu.lwidth(), cu.lheight());
   int cuSizeId = storch::getSizeId(cuSize);
   
-  storch::traceCall = TRACE_estIntraPredLumaQT;
+  storch::traceCall = storch::sTRACE_estIntraPredLumaQT;
   storch::traceCall &= (!TRACE_singleCTU || (TRACE_singleCTU && ctuX==TRACE_targetCtuX && ctuY==TRACE_targetCtuY));
   storch::traceCall &= (!TRACE_singleSizeId || (TRACE_singleSizeId && cuSizeId==TRACE_targetSizeId));
   storch::traceCall &= (!TRACE_singleCuSize || (TRACE_singleCuSize && cs.area.lwidth()==TRACE_targetCuWidth && cs.area.lheight()==TRACE_targetCuHeight));
   
   if( storch::traceCall ){
-    if(TRACE_estIntraPredLumaQT){
+    if(storch::sTRACE_estIntraPredLumaQT){
       printf("estIntraPredLumaQT,POC=%d,X=%d,Y=%d,W=%d,H=%d,Part,", cs.picture->poc, cs.area.lx(), cs.area.ly(), cs.area.lwidth(), cs.area.lheight());
   
       PartitioningStack z = partitioner.getPartStack();
@@ -900,23 +900,29 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
           //===== init pattern for luma prediction =====
          
           // Fetch the reference samples that will be used for reduced and expanded angular intra pred (modes from HEVC and then new ones from VVC)    
-	  if(ALTERNATIVE_REF_ANGULAR && TEMPORAL_INTRA){
-            initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
+          if(storch::sGPU_alternativeRefAngular){
+            if(storch::sGPU_alternativeRefType=="PREV_FILT"){
+              initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
+            }
+            else if(storch::sGPU_alternativeRefType=="PREV_REC"){
+              initIntraPatternChType(cu, pu.Y(), PREV_PRED, true);
+            }
+            else if(storch::sGPU_alternativeRefType=="ORIGINAL"){
+              initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
+            }
+            else if(storch::sGPU_alternativeRefType=="CONV"){
+              initIntraPatternChType(cu, pu.Y(), CONV_ORIG, true);
+            }
+            else{
+              printf("[!] ERROR: sGPU_alternativeRefAngular=1 but no reference type is set\n");
+              exit(0);
+            }
           }
-	  else if(ALTERNATIVE_REF_ANGULAR && TEMPORAL_PRED){
-	    initIntraPatternChType(cu, pu.Y(), PREV_PRED, true);
-	  }
-          else if(ALTERNATIVE_REF_ANGULAR && ORIG_SAMPLES_INTRA){
-            initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
-          }
-	  else if(ALTERNATIVE_REF_ANGULAR && CONVOLVED_SAMPLES_INTRA){
-	    initIntraPatternChType(cu, pu.Y(), CONV_ORIG, true);
-	  }
           else{
             initIntraPatternChType(cu, pu.Y(), CURR_REC, true);
           }
           
-          
+ 
           bool satdChecked[NUM_INTRA_MODE];
           std::fill_n(satdChecked, NUM_INTRA_MODE, false);
 
@@ -1116,19 +1122,26 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
               pu.multiRefIdx = multiRefIdx;
               {
 
-		// Fetch reference samples again. Now they are used for MRL
-                if(ALTERNATIVE_REF_MRL && TEMPORAL_INTRA){
-                  initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
+                // Fetch reference samples again. Now they are used for MRL
+                
+                if(storch::sGPU_alternativeRefMRL){
+                  if(storch::sGPU_alternativeRefType=="PREV_FILT"){
+                    initIntraPatternChType(cu, pu.Y(), PREV_REC, true);
+                  }
+                  else if(storch::sGPU_alternativeRefType=="PREV_REC"){
+                    initIntraPatternChType(cu, pu.Y(), PREV_PRED, true);
+                  }
+                  else if(storch::sGPU_alternativeRefType=="ORIGINAL"){
+                    initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
+                  }
+                  else if(storch::sGPU_alternativeRefType=="CONV"){
+                    initIntraPatternChType(cu, pu.Y(), CONV_ORIG, true);
+                  }
+                  else{
+                    printf("[!] ERROR: sGPU_alternativeRefMRL=1 but no reference type is set\n");
+                    exit(0);
+                  }
                 }
-		else if(ALTERNATIVE_REF_MRL && TEMPORAL_PRED){
-                  initIntraPatternChType(cu, pu.Y(), PREV_PRED, true);
-                }
-                else if(ALTERNATIVE_REF_MRL && ORIG_SAMPLES_INTRA){
-                  initIntraPatternChType(cu, pu.Y(), CURR_ORIG, true);
-                }
-		else if(ALTERNATIVE_REF_MRL && CONVOLVED_SAMPLES_INTRA){
-		  initIntraPatternChType(cu, pu.Y(), CONV_ORIG, true);
-		}
                 else{
                   initIntraPatternChType(cu, pu.Y(), CURR_REC, true);
                 }
@@ -1246,22 +1259,30 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
 
               // At this point the reference samples are derived
               // Fetch the reference samples that will be used in MIP
-              if(ALTERNATIVE_REF_MIP && TEMPORAL_INTRA){
-                initIntraPatternChType(cu, pu.Y(), PREV_REC);
-              } 
-	      else if(ALTERNATIVE_REF_MIP && TEMPORAL_PRED){
-                initIntraPatternChType(cu, pu.Y(), PREV_PRED);
-              } 
-              else if(ALTERNATIVE_REF_MIP && ORIG_SAMPLES_INTRA){
-                initIntraPatternChType(cu, pu.Y(), CURR_ORIG);
+              
+              
+              if(storch::sGPU_alternativeRefMIP){
+                if(storch::sGPU_alternativeRefType=="PREV_FILT"){
+                  initIntraPatternChType(cu, pu.Y(), PREV_REC);
+                }
+                else if(storch::sGPU_alternativeRefType=="PREV_REC"){
+                  initIntraPatternChType(cu, pu.Y(), PREV_PRED);
+                }
+                else if(storch::sGPU_alternativeRefType=="ORIGINAL"){
+                  initIntraPatternChType(cu, pu.Y(), CURR_ORIG);
+                }
+                else if(storch::sGPU_alternativeRefType=="CONV"){
+                  initIntraPatternChType(cu, pu.Y(), CONV_ORIG);
+                }
+                else{
+                  printf("[!] ERROR: sGPU_alternativeRefMIP=1 but no reference type is set\n");
+                  exit(0);
+                }
               }
-	      else if(ALTERNATIVE_REF_MIP && CONVOLVED_SAMPLES_INTRA){
-		initIntraPatternChType(cu, pu.Y(), CONV_ORIG);
-	      }	      
               else{
                 initIntraPatternChType(cu, pu.Y(), CURR_REC);
               }
-
+                            
               initIntraMip(pu, pu.Y());
 
               const int transpOff    = getNumModesMip(pu.Y());
@@ -1293,7 +1314,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                 // SAD is scaled by 2 to align with the scaling of HAD               
                 Distortion minSadHad;
                 
-                if(GPU_MIP){
+                if(storch::sGPU_4x4HadMIP){
                   distParamHad_4x4.extract_rd = 0;
                   minSadHad = std::min(distParamSad.distFunc(distParamSad) * 2, distParamHad_4x4.distFunc(distParamHad_4x4));
                 }
@@ -1324,7 +1345,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, c
                     printf("MIP,M=%d,Transp=%d,BitsTotal %ld\n", modeFull, isTransposed, fracModeBits);
                 }
                 
-                if(EXTRACT_distortion && storch::targetBlock){
+                if(storch::sEXTRACT_mipResults && storch::targetBlock){
                   int ctuIdx = 0;
                   // Y component
                   ctuIdx = (cu.ly()/128)  * cs.pps->getPicWidthInCtu();

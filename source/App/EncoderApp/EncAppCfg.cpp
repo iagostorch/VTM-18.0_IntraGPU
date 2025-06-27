@@ -55,6 +55,8 @@
 #define MACRO_TO_STRING_HELPER(val) #val
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
 
+#include "CommonLib/storchmain.h"
+
 using namespace std;
 namespace po = df::program_options_lite;
 
@@ -579,6 +581,7 @@ static uint32_t getMaxSlicesByLevel( Level::Name level )
 bool EncAppCfg::parseCfg( int argc, char* argv[] )
 {
   bool do_help = false;
+  bool do_storch_help = false;
 
   int tmpChromaFormat;
   int tmpInputChromaFormat;
@@ -768,9 +771,34 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("c",    po::parseConfigFile, "configuration file name")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                                  0, "warn for unknown configuration parameters instead of failing")
   ("isSDR",                                           sdr,                                              false, "compatibility")
+  ("storch",					      do_storch_help,					false, "help for custom encoding parameters")
 #if ENABLE_SIMD_OPT
   ("SIMD",                                            ignore,                                      string(""), "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension\n")
 #endif
+  
+  
+  
+  /* ------------------------------------*/ 
+  /*	      Custom parameters            */
+  /* ------------------------------------*/
+  // TRACE parameters - Export intermediary encoding information into the encoding output
+  ("sTRACE_estIntraPredLumaQT",                       storch::sTRACE_estIntraPredLumaQT,                  0, "Trace all calls to estIntraPredLumaQT, including the block dimension, position, current split series, and encoding modes to be tested")
+  
+  // EXTRACT parameters - Export intermediary encoding information into files
+  ("sEXTRACT_frame",                                  storch::sEXTRACT_frame,                             0, "Extract the original, true original, predicted and reconstructed frame")
+  ("sEXTRACT_mipResults",                             storch::sEXTRACT_mipResults,                        0, "Extract the distortion for each MIP mode in each block")
+  
+  // GPU parameters - Modify the encoding process to expose parallelism
+  ("sGPU_4x4HadMIP",                              storch::sGPU_4x4HadMIP,                         0,          "When enabled, the distortion during MIP in RMD is computed using only 4x4 hadamard. SAD is computed as usual")
+  ("sGPU_alternativeRefMIP",                      storch::sGPU_alternativeRefMIP,                 0,          "When enabled, the prediction using MIP during RMD uses alternative references (see sGPU_alternativeRefType)")
+  ("sGPU_alternativeRefAngular",                  storch::sGPU_alternativeRefAngular,             0,          "When enabled, the prediction using angular during RMD uses alternative references (see sGPU_alternativeRefType)")
+  ("sGPU_alternativeRefMRL",                      storch::sGPU_alternativeRefMRL,                 0,          "When enabled, the prediction using MRL during RMD uses alternative references (see sGPU_alternativeRefType)")
+  ("sGPU_alternativeRefType",                     storch::sGPU_alternativeRefType,                string(""), "Receives a string with the type of alternative reference. Only allowed when at least one tool uses alternative references")
+  ("sGPU_filterType",                             storch::sGPU_filterType,                        string(""), "Receives the code for one of the predefined low-pass filters")
+  
+  
+  
+  
   // File, I/O and source parameters
   ("InputFile,i",                                     m_inputFileName,                             string(""), "Original YUV input file name")
   ("InputPathPrefix,-ipp",                            inputPathPrefix,                             string(""), "pathname to prepend to input filename")

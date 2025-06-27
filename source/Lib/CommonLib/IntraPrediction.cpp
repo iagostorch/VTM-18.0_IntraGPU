@@ -1016,7 +1016,7 @@ void IntraPrediction::xFillReferenceSamples(const CPelBuf &recoBuf, Pel* refBufU
   
   
   
-  if(TRACE_estIntraPredLumaQT && TRACE_fineGrainedNeighborAvailability && storch::targetBlock)
+  if(storch::sTRACE_estIntraPredLumaQT && TRACE_fineGrainedNeighborAvailability && storch::targetBlock)
   {
     
     int aboveLeft = isAboveLeftAvailable( cu, chType, posLT );
@@ -1971,7 +1971,7 @@ void IntraPrediction::initIntraMip( const PredictionUnit &pu, const CompArea &ar
 
 void IntraPrediction::predIntraMip( const ComponentID compId, PelBuf &piPred, const PredictionUnit &pu )
 {
-  if(storch::targetBlock && TRACE_estIntraPredLumaQT && (TRACE_boundaries || TRACE_predictionProgress || TRACE_distortion))        
+  if(storch::targetBlock && storch::sTRACE_estIntraPredLumaQT && (TRACE_boundaries || TRACE_predictionProgress || TRACE_distortion))        
   {
     printf("\n.... Doing MIP prediction. Mode %d %s\n", pu.intraDir[CHANNEL_TYPE_LUMA], pu.mipTransposedFlag ? "TRANSP" : "NOT TRAN");
   }

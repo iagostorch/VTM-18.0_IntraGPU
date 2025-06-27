@@ -159,7 +159,7 @@ void MatrixIntraPrediction::predBlock(int *const result, const int modeIdx, cons
   const int* const reducedBoundary = transpose ? m_reducedBoundaryTransposed.data() : m_reducedBoundary.data();
   computeReducedPred(reducedPred, reducedBoundary, matrix, transpose, bitDepth);
   
-  if((TRACE_boundaries || TRACE_predictionProgress) && TRACE_estIntraPredLumaQT && storch::targetBlock){
+  if((TRACE_boundaries || TRACE_predictionProgress) && storch::sTRACE_estIntraPredLumaQT && storch::targetBlock){
     
     // printf(" ## INSIDE PREDICTION OF REDUCED BLOCK...............\n");
     
