@@ -171,9 +171,6 @@ storch::storch() {
   filterNameCoeffHash.insert( { "BLUR_3x3_v1", BLUR_3x3_v1 } );
   filterNameCoeffHash.insert( { "BLUR_3x3_v2", BLUR_3x3_v2 } );
   filterNameCoeffHash.insert( { "BLUR_3x3_v3", BLUR_3x3_v3 } );
-  filterNameCoeffHash.insert( { "BLUR_3x3_v4", BLUR_3x3_v4 } );
-  filterNameCoeffHash.insert( { "BLUR_3x3_v5", BLUR_3x3_v5 } );
-  filterNameCoeffHash.insert( { "BLUR_3x3_v6", BLUR_3x3_v6 } );
 
   filterNameCoeffHash.insert( { "BLUR_5x5_v0", BLUR_5x5_v0 } );
   filterNameCoeffHash.insert( { "BLUR_5x5_v1", BLUR_5x5_v1 } );
@@ -922,7 +919,7 @@ PelBuf storch::convolveFrameKernel_v2(PelBuf frame, KERNEL kernelSelector){
   float temp=0;
     
    // BLUR_3x3
-   if(kernelSelector <= BLUR_3x3_v6)
+   if(kernelSelector <= BLUR_3x3_v3)
    {
      
     double blur_3x3[3][3];
@@ -931,96 +928,41 @@ PelBuf storch::convolveFrameKernel_v2(PelBuf frame, KERNEL kernelSelector){
 
     convVariation = storch::translateKernelName(kernelSelector);
 
-//    if(CONVOLVED_SAMPLES_INTRA) storch::printKernelName(kernelSelector); // printf("CONVOLUTION 3x3 GAUSSIAN 0.5\n");
-
-    
+   
     // Pseudo GAUSS 3x3
     if(kernelSelector <= BLUR_3x3_PseudoG_14){
       for(int i=0; i<3; i++){
-	for(int j=0; j<3; j++){
-	  blur_3x3[i][j] = blur_3x3_pseudo_gauss[kernelSelector][i][j];
-	}
+        for(int j=0; j<3; j++){
+          blur_3x3[i][j] = blur_3x3_pseudo_gauss[kernelSelector][i][j];
+        }
       }
     }
     // Float GAUSS
     else if(kernelSelector <= BLUR_3x3_floatG_030){
       for(int i=0; i<3; i++){
-	for(int j=0; j<3; j++){
-	  blur_3x3[i][j] = blur_3x3_gauss[kernelSelector-BLUR_3x3_floatG_20][i][j];
-	}
+        for(int j=0; j<3; j++){
+            blur_3x3[i][j] = blur_3x3_gauss[kernelSelector-BLUR_3x3_floatG_20][i][j];
+        }
       }
     }
-    
     // Int GAUSS
     else if(kernelSelector <= BLUR_3x3_intG_030){
       for(int i=0; i<3; i++){
-	for(int j=0; j<3; j++){
-	  blur_3x3[i][j] = blur_3x3_gauss_int[kernelSelector-BLUR_3x3_intG_20][i][j];
-	}
-      }
-    }
-    
-    
-
-    
-    else if(kernelSelector==BLUR_3x3_v0){
-      
-      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v0\n");
-      for(int i=0; i<3; i++){
         for(int j=0; j<3; j++){
-          blur_3x3[i][j] = blur_3x3_v0[i][j];
+          blur_3x3[i][j] = blur_3x3_gauss_int[kernelSelector-BLUR_3x3_intG_20][i][j];
         }
       }
     }
-    else if(kernelSelector==BLUR_3x3_v1){
-      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v1\n");
+    // Empirical 3x3
+    else if(kernelSelector <= BLUR_3x3_v3){
       for(int i=0; i<3; i++){
         for(int j=0; j<3; j++){
-          blur_3x3[i][j] = blur_3x3_v1[i][j];
+          blur_3x3[i][j] = blur_3x3_emp[kernelSelector-BLUR_3x3_v0][i][j];
         }
-      }      
-    }
-    else if(kernelSelector==BLUR_3x3_v2){
-      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v2\n");
-      for(int i=0; i<3; i++){
-        for(int j=0; j<3; j++){
-          blur_3x3[i][j] = blur_3x3_v2[i][j];
-        }
-      }      
-    }
-    else if(kernelSelector==BLUR_3x3_v3){
-      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v3\n");
-      for(int i=0; i<3; i++){
-        for(int j=0; j<3; j++){
-          blur_3x3[i][j] = blur_3x3_v3[i][j];
-        }
-      }      
-    }
-    else if(kernelSelector==BLUR_3x3_v4){
-      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v4\n");
-      for(int i=0; i<3; i++){
-        for(int j=0; j<3; j++){
-          blur_3x3[i][j] = blur_3x3_v4[i][j];
-        }
-      }      
-    }
-    else if(kernelSelector==BLUR_3x3_v5){
-      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v5\n");
-      for(int i=0; i<3; i++){
-        for(int j=0; j<3; j++){
-          blur_3x3[i][j] = blur_3x3_v5[i][j];
-        }
-      }      
-    }
-    else if(kernelSelector==BLUR_3x3_v6){
-      if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 3x3 v6\n");
-      for(int i=0; i<3; i++){
-        for(int j=0; j<3; j++){
-          blur_3x3[i][j] = blur_3x3_v6[i][j];
-        }
-      }      
+      }
     }
     
+        
     // Compute divider for the filter
     float div = 0.0, div_corner=0.0, div_firstLast = 0.0;
     
@@ -1169,57 +1111,28 @@ PelBuf storch::convolveFrameKernel_v2(PelBuf frame, KERNEL kernelSelector){
      convolved.at(x,y) = temp;
          
    }
+  
    else if(kernelSelector <= BLUR_5x5_v4)
    {
       int blur_5x5[5][5];
     
-      if(kernelSelector==BLUR_5x5_v0){
-	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v0\n");
-	for(int i=0; i<5; i++){
-	  for(int j=0; j<5; j++){
-	    blur_5x5[i][j] = blur_5x5_v0[i][j];
-	  }
-	}
-      }
-      else if(kernelSelector==BLUR_5x5_v1){
-	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v1\n");
-	for(int i=0; i<5; i++){
-	  for(int j=0; j<5; j++){
-	    blur_5x5[i][j] = blur_5x5_v1[i][j];
-	  }
-	}      
-      }
-      else if(kernelSelector==BLUR_5x5_v2){
-	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v2\n");
-	for(int i=0; i<5; i++){
-	  for(int j=0; j<5; j++){
-	    blur_5x5[i][j] = blur_5x5_v2[i][j];
-	  }
-	}      
-      }
-      else if(kernelSelector==BLUR_5x5_v3){
-	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v3\n");
-	for(int i=0; i<5; i++){
-	  for(int j=0; j<5; j++){
-	    blur_5x5[i][j] = blur_5x5_v3[i][j];
-	  }
-	}
-      }
-      else if(kernelSelector==BLUR_5x5_v4){
-	if(CONVOLVED_SAMPLES_INTRA) printf("CONVOLUTION 5x5 v4\n");
-	for(int i=0; i<5; i++){
-	  for(int j=0; j<5; j++){
-	    blur_5x5[i][j] = blur_5x5_v4[i][j];
-	  }
-	}      
-      }
-      else if(kernelSelector<=BLUR_5x5_PseudoG_3_8){
+      // Pseudo Gauss 5x5
+      if(kernelSelector <= BLUR_5x5_PseudoG_3_8){
         for(int i=0; i<5; i++){
           for(int j=0; j<5; j++){
             blur_5x5[i][j] = blur_5x5_pseudo_gauss[kernelSelector - BLUR_5x5_PseudoG_2_3][i][j];
           }
-        }  
+        }
       }
+      
+      else if(kernelSelector <= BLUR_5x5_v4){
+        for(int i=0; i<5; i++){
+          for(int j=0; j<5; j++){
+            blur_5x5[i][j] = blur_5x5_emp[kernelSelector - BLUR_5x5_v0][i][j];
+          }
+        }
+      }
+      
       
       // Compute divider for the filter
       float div=0.0, div_outerCorner=0.0, div_innerCorner=0.0, div_firstLast=0.0, div_befFirstLast=0.0;
@@ -1924,144 +1837,132 @@ void storch::printKernelName(KERNEL kernelSelector){
       break;
 
     
-        
-    
-    
-    
     case(BLUR_3x3_floatG_20):
-	cout << "BLUR_3x3_floatG_20" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_20" << endl;
+      break;
     case(BLUR_3x3_floatG_10):
-	cout << "BLUR_3x3_floatG_10" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_10" << endl;
+      break;
     case(BLUR_3x3_floatG_095):
-	cout << "BLUR_3x3_floatG_095" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_095" << endl;
+      break;
     case(BLUR_3x3_floatG_090):
-	cout << "BLUR_3x3_floatG_090" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_090" << endl;
+      break;
     case(BLUR_3x3_floatG_085):
-	cout << "BLUR_3x3_floatG_085" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_085" << endl;
+      break;
     case(BLUR_3x3_floatG_080):
-	cout << "BLUR_3x3_floatG_080" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_080" << endl;
+      break;
     case(BLUR_3x3_floatG_075):
-	cout << "BLUR_3x3_floatG_075" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_075" << endl;
+      break;
     case(BLUR_3x3_floatG_070):
-	cout << "BLUR_3x3_floatG_070" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_070" << endl;
+      break;
     case(BLUR_3x3_floatG_065):
-	cout << "BLUR_3x3_floatG_065" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_065" << endl;
+      break;
     case(BLUR_3x3_floatG_060):
-	cout << "BLUR_3x3_floatG_060" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_060" << endl;
+      break;
     case(BLUR_3x3_floatG_055):
-	cout << "BLUR_3x3_floatG_055" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_055" << endl;
+      break;
     case(BLUR_3x3_floatG_050):
-	cout << "BLUR_3x3_floatG_050" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_050" << endl;
+      break;
     case(BLUR_3x3_floatG_045):
-	cout << "BLUR_3x3_floatG_045" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_045" << endl;
+      break;
     case(BLUR_3x3_floatG_040):
-	cout << "BLUR_3x3_floatG_040" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_040" << endl;
+      break;
     case(BLUR_3x3_floatG_035):
-	cout << "BLUR_3x3_floatG_035" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_035" << endl;
+      break;
     case(BLUR_3x3_floatG_030)     :
-	cout << "BLUR_3x3_floatG_030" << endl;
-	break;
+      cout << "BLUR_3x3_floatG_030" << endl;
+      break;
   
-  case(BLUR_3x3_intG_20):
-  cout << "BLUR_3x3_intG_20" << endl;
-  break;
+    case(BLUR_3x3_intG_20):
+      cout << "BLUR_3x3_intG_20" << endl;
+      break;
     case(BLUR_3x3_intG_10):
-  cout << "BLUR_3x3_intG_10" << endl;
-  break;
+      cout << "BLUR_3x3_intG_10" << endl;
+      break;
     case(BLUR_3x3_intG_095):
-  cout << "BLUR_3x3_intG_095" << endl;
-  break;
+      cout << "BLUR_3x3_intG_095" << endl;
+      break;
     case(BLUR_3x3_intG_090):
-  cout << "BLUR_3x3_intG_090" << endl;
-  break;
+      cout << "BLUR_3x3_intG_090" << endl;
+      break;
     case(BLUR_3x3_intG_085):
-  cout << "BLUR_3x3_intG_085" << endl;
-  break;
+      cout << "BLUR_3x3_intG_085" << endl;
+      break;
     case(BLUR_3x3_intG_080):
-  cout << "BLUR_3x3_intG_080" << endl;
-  break;
+      cout << "BLUR_3x3_intG_080" << endl;
+      break;
     case(BLUR_3x3_intG_075):
-  cout << "BLUR_3x3_intG_075" << endl;
-  break;
+      cout << "BLUR_3x3_intG_075" << endl;
+      break;
     case(BLUR_3x3_intG_070):
-  cout << "BLUR_3x3_intG_070" << endl;
-  break;
+      cout << "BLUR_3x3_intG_070" << endl;
+      break;
     case(BLUR_3x3_intG_065):
-  cout << "BLUR_3x3_intG_065" << endl;
-  break;
+      cout << "BLUR_3x3_intG_065" << endl;
+      break;
     case(BLUR_3x3_intG_060):
-  cout << "BLUR_3x3_intG_060" << endl;
-  break;
+      cout << "BLUR_3x3_intG_060" << endl;
+      break;
     case(BLUR_3x3_intG_055):
-  cout << "BLUR_3x3_intG_055" << endl;
-  break;
+      cout << "BLUR_3x3_intG_055" << endl;
+      break;
     case(BLUR_3x3_intG_050):
-  cout << "BLUR_3x3_intG_050" << endl;
-  break;
+      cout << "BLUR_3x3_intG_050" << endl;
+      break;
     case(BLUR_3x3_intG_045):
-  cout << "BLUR_3x3_intG_045" << endl;
-  break;
+      cout << "BLUR_3x3_intG_045" << endl;
+      break;
     case(BLUR_3x3_intG_040):
-  cout << "BLUR_3x3_intG_040" << endl;
-  break;
+      cout << "BLUR_3x3_intG_040" << endl;
+      break;
     case(BLUR_3x3_intG_035):
-  cout << "BLUR_3x3_intG_035" << endl;
-  break;
+      cout << "BLUR_3x3_intG_035" << endl;
+      break;
     case(BLUR_3x3_intG_030)     :
-  cout << "BLUR_3x3_intG_030" << endl;
-  break;
+      cout << "BLUR_3x3_intG_030" << endl;
+      break;
   
     case(BLUR_3x3_v0):
-	cout << "BLUR_3x3_v0" << endl;
-	break;
+      cout << "BLUR_3x3_v0" << endl;
+      break;
     case(BLUR_3x3_v1):
-	cout << "BLUR_3x3_v1" << endl;
-	break;
+      cout << "BLUR_3x3_v1" << endl;
+      break;
     case(BLUR_3x3_v2):
-	cout << "BLUR_3x3_v2" << endl;
-	break;
+      cout << "BLUR_3x3_v2" << endl;
+      break;
     case(BLUR_3x3_v3):
-	cout << "BLUR_3x3_v3" << endl;
-	break;
-    case(BLUR_3x3_v4):
-	cout << "BLUR_3x3_v4" << endl;
-	break;
-    case(BLUR_3x3_v5):
-	cout << "BLUR_3x3_v5" << endl;
-	break;
-    case(BLUR_3x3_v6):
-	cout << "BLUR_3x3_v6" << endl;
-	break;
+      cout << "BLUR_3x3_v3" << endl;
+      break;
+
     case(BLUR_5x5_v0):
-	cout << "BLUR_5x5_v0" << endl;
-	break;
+      cout << "BLUR_5x5_v0" << endl;
+      break;
     case(BLUR_5x5_v1):
-	cout << "BLUR_5x5_v1" << endl;
-	break;
+      cout << "BLUR_5x5_v1" << endl;
+      break;
     case(BLUR_5x5_v2):
-	cout << "BLUR_5x5_v2" << endl;
-	break;
+      cout << "BLUR_5x5_v2" << endl;
+      break;
     case(BLUR_5x5_v3):
-	cout << "BLUR_5x5_v3" << endl;
-	break;
+      cout << "BLUR_5x5_v3" << endl;
+      break;
     case(BLUR_5x5_v4):
-	cout << "BLUR_5x5_v4" << endl;
-	break;
+      cout << "BLUR_5x5_v4" << endl;
+      break;
     default:
       cout << "ERROR IDENTIFYING KERNEL" << endl;
       break;
@@ -2073,199 +1974,190 @@ string storch::translateKernelName(KERNEL kernelSelector){
   switch(kernelSelector){
     
     case(BLUR_3x3_PseudoG_2):
-	return "BLUR_3x3_PseudoG_2";
-	break;
-    
+      return "BLUR_3x3_PseudoG_2";
+      break;
     case(BLUR_3x3_PseudoG_3):
-	return  "BLUR_3x3_PseudoG_3";
-	break;
+      return  "BLUR_3x3_PseudoG_3";
+      break;
     case(BLUR_3x3_PseudoG_4):
-	return  "BLUR_3x3_PseudoG_4" ;
-	break;
+      return  "BLUR_3x3_PseudoG_4" ;
+      break;
     case(BLUR_3x3_PseudoG_5):
-	return  "BLUR_3x3_PseudoG_5" ;
-	break;
+      return  "BLUR_3x3_PseudoG_5" ;
+      break;
     case(BLUR_3x3_PseudoG_6):
-	return  "BLUR_3x3_PseudoG_6" ;
-	break;
+      return  "BLUR_3x3_PseudoG_6" ;
+      break;
     case(BLUR_3x3_PseudoG_7):
-	return  "BLUR_3x3_PseudoG_7" ;
-	break;
+      return  "BLUR_3x3_PseudoG_7" ;
+      break;
     case(BLUR_3x3_PseudoG_8):
-	return  "BLUR_3x3_PseudoG_8" ;
-	break;
+      return  "BLUR_3x3_PseudoG_8" ;
+      break;
     case(BLUR_3x3_PseudoG_9):
-	return  "BLUR_3x3_PseudoG_9" ;
-	break;
+      return  "BLUR_3x3_PseudoG_9" ;
+      break;
     case(BLUR_3x3_PseudoG_10):
-	return  "BLUR_3x3_PseudoG_10";
-	break;
+      return  "BLUR_3x3_PseudoG_10";
+      break;
     case(BLUR_3x3_PseudoG_11):
-	return  "BLUR_3x3_PseudoG_11" ;
-	break;
+      return  "BLUR_3x3_PseudoG_11" ;
+      break;
     case(BLUR_3x3_PseudoG_12):
-	return  "BLUR_3x3_PseudoG_12" ;
-	break;
+      return  "BLUR_3x3_PseudoG_12" ;
+      break;
     case(BLUR_3x3_PseudoG_13):
-	return  "BLUR_3x3_PseudoG_13" ;
-	break;
+      return  "BLUR_3x3_PseudoG_13" ;
+      break;
     case(BLUR_3x3_PseudoG_14):
-	return  "BLUR_3x3_PseudoG_14" ;
-	break;
+      return  "BLUR_3x3_PseudoG_14" ;
+      break;
     
   
   
-  case(BLUR_5x5_PseudoG_2_3):
-    return  "BLUR_5x5_PseudoG_2_3" ;
-    break;
-  case(BLUR_5x5_PseudoG_2_4):
-    return  "BLUR_5x5_PseudoG_2_4" ;
-    break;
-  case(BLUR_5x5_PseudoG_3_8):
-    return  "BLUR_5x5_PseudoG_3_8" ;
-    break;
-    
+    case(BLUR_5x5_PseudoG_2_3):
+      return  "BLUR_5x5_PseudoG_2_3" ;
+      break;
+    case(BLUR_5x5_PseudoG_2_4):
+      return  "BLUR_5x5_PseudoG_2_4" ;
+      break;
+    case(BLUR_5x5_PseudoG_3_8):
+      return  "BLUR_5x5_PseudoG_3_8" ;
+      break;
+
     
     case(BLUR_3x3_floatG_20):
-	return "BLUR_3x3_floatG_20";
-	break;
+      return "BLUR_3x3_floatG_20";
+      break;
     case(BLUR_3x3_floatG_10):
-	return "BLUR_3x3_floatG_10";
-	break;
+      return "BLUR_3x3_floatG_10";
+      break;
     case(BLUR_3x3_floatG_095):
-	return "BLUR_3x3_floatG_095";
-	break;
+      return "BLUR_3x3_floatG_095";
+      break;
     case(BLUR_3x3_floatG_090):
-	return "BLUR_3x3_floatG_090";
-	break;
+      return "BLUR_3x3_floatG_090";
+      break;
     case(BLUR_3x3_floatG_085):
-	return "BLUR_3x3_floatG_085";
-	break;
+      return "BLUR_3x3_floatG_085";
+      break;
     case(BLUR_3x3_floatG_080):
-	return "BLUR_3x3_floatG_080";
-	break;
+      return "BLUR_3x3_floatG_080";
+      break;
     case(BLUR_3x3_floatG_075):
-	return "BLUR_3x3_floatG_075";
-	break;
+      return "BLUR_3x3_floatG_075";
+      break;
     case(BLUR_3x3_floatG_070):
-	return "BLUR_3x3_floatG_070";
-	break;
+      return "BLUR_3x3_floatG_070";
+      break;
     case(BLUR_3x3_floatG_065):
-	return "BLUR_3x3_floatG_065";
-	break;
+      return "BLUR_3x3_floatG_065";
+      break;
     case(BLUR_3x3_floatG_060):
-	return "BLUR_3x3_floatG_060";
-	break;
+      return "BLUR_3x3_floatG_060";
+      break;
     case(BLUR_3x3_floatG_055):
-	return "BLUR_3x3_floatG_055";
-	break;
+      return "BLUR_3x3_floatG_055";
+      break;
     case(BLUR_3x3_floatG_050):
-	return "BLUR_3x3_floatG_050";
-	break;
+      return "BLUR_3x3_floatG_050";
+      break;
     case(BLUR_3x3_floatG_045):
-	return "BLUR_3x3_floatG_045";
-	break;
+      return "BLUR_3x3_floatG_045";
+      break;
     case(BLUR_3x3_floatG_040):
-	return "BLUR_3x3_floatG_040";
-	break;
+      return "BLUR_3x3_floatG_040";
+      break;
     case(BLUR_3x3_floatG_035):
-	return "BLUR_3x3_floatG_035";
-	break;
+      return "BLUR_3x3_floatG_035";
+      break;
     case(BLUR_3x3_floatG_030)     :
-	return "BLUR_3x3_floatG_030";
-	break;
+      return "BLUR_3x3_floatG_030";
+      break;
 
-  case(BLUR_3x3_intG_20):
-  return "BLUR_3x3_intG_20";
-  break;
+    case(BLUR_3x3_intG_20):
+      return "BLUR_3x3_intG_20";
+      break;
     case(BLUR_3x3_intG_10):
-  return "BLUR_3x3_intG_10";
-  break;
+      return "BLUR_3x3_intG_10";
+      break;
     case(BLUR_3x3_intG_095):
-  return "BLUR_3x3_intG_095";
-  break;
+      return "BLUR_3x3_intG_095";
+      break;
     case(BLUR_3x3_intG_090):
-  return "BLUR_3x3_intG_090";
-  break;
+      return "BLUR_3x3_intG_090";
+      break;
     case(BLUR_3x3_intG_085):
-  return "BLUR_3x3_intG_085";
-  break;
+      return "BLUR_3x3_intG_085";
+      break;
     case(BLUR_3x3_intG_080):
-  return "BLUR_3x3_intG_080";
-  break;
+      return "BLUR_3x3_intG_080";
+      break;
     case(BLUR_3x3_intG_075):
-  return "BLUR_3x3_intG_075";
-  break;
+      return "BLUR_3x3_intG_075";
+      break;
     case(BLUR_3x3_intG_070):
-  return "BLUR_3x3_intG_070";
-  break;
+      return "BLUR_3x3_intG_070";
+      break;
     case(BLUR_3x3_intG_065):
-  return "BLUR_3x3_intG_065";
-  break;
+      return "BLUR_3x3_intG_065";
+      break;
     case(BLUR_3x3_intG_060):
-  return "BLUR_3x3_intG_060";
-  break;
+      return "BLUR_3x3_intG_060";
+      break;
     case(BLUR_3x3_intG_055):
-  return "BLUR_3x3_intG_055";
-  break;
+      return "BLUR_3x3_intG_055";
+      break;
     case(BLUR_3x3_intG_050):
-  return "BLUR_3x3_intG_050";
-  break;
+      return "BLUR_3x3_intG_050";
+      break;
     case(BLUR_3x3_intG_045):
-  return "BLUR_3x3_intG_045";
-  break;
+      return "BLUR_3x3_intG_045";
+      break;
     case(BLUR_3x3_intG_040):
-  return "BLUR_3x3_intG_040";
-  break;
+      return "BLUR_3x3_intG_040";
+      break;
     case(BLUR_3x3_intG_035):
-  return "BLUR_3x3_intG_035";
-  break;
+      return "BLUR_3x3_intG_035";
+      break;
     case(BLUR_3x3_intG_030)     :
-  return "BLUR_3x3_intG_030";
-  break;
-
+      return "BLUR_3x3_intG_030";
+      break;
 
 
     case(BLUR_3x3_v0):
-	return "BLUR_3x3_v0";
-	break;
+      return "BLUR_3x3_v0";
+      break;
     case(BLUR_3x3_v1):
-	return "BLUR_3x3_v1";
-	break;
+      return "BLUR_3x3_v1";
+      break;
     case(BLUR_3x3_v2):
-	return "BLUR_3x3_v2";
-	break;
+      return "BLUR_3x3_v2";
+      break;
     case(BLUR_3x3_v3):
-	return "BLUR_3x3_v3";
-	break;
-    case(BLUR_3x3_v4):
-	return "BLUR_3x3_v4";
-	break;
-    case(BLUR_3x3_v5):
-	return "BLUR_3x3_v5";
-	break;
-    case(BLUR_3x3_v6):
-	return "BLUR_3x3_v6";
-	break;
+      return "BLUR_3x3_v3";
+      break;
+      
+      
     case(BLUR_5x5_v0):
-	return "BLUR_5x5_v0";
-	break;
+      return "BLUR_5x5_v0";
+      break;
     case(BLUR_5x5_v1):
-	return "BLUR_5x5_v1";
-	break;
+      return "BLUR_5x5_v1";
+      break;
     case(BLUR_5x5_v2):
-	return "BLUR_5x5_v2";
-	break;
+      return "BLUR_5x5_v2";
+      break;
     case(BLUR_5x5_v3):
-	return "BLUR_5x5_v3";
-	break;
+      return "BLUR_5x5_v3";
+      break;
     case(BLUR_5x5_v4):
-	return "BLUR_5x5_v4";
-	break;
+      return "BLUR_5x5_v4";
+      break;
     default:
-      	cout <<  "ERROR IDENTIFYING KERNEL" << endl;
-      	return " ";
-      	break;
+      cout <<  "ERROR IDENTIFYING KERNEL" << endl;
+      return " ";
+      break;
   }
   
 }

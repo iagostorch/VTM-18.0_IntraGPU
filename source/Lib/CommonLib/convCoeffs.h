@@ -141,112 +141,112 @@ const float blur_3x3_gauss[16][3][3] = {
 };
 
 const int blur_3x3_gauss_int[16][3][3] = {
-// BLUR_3x3_G_int_20
+    // BLUR_3x3_G_int_20
    {
       { 1, 1, 1 },
       { 1, 1, 1 },
       { 1, 1, 1 }
    },
  
-// BLUR_3x3_G_int_10
+    // BLUR_3x3_G_int_10
    {
       { 1, 2, 1 },
       { 2, 3, 2 },
       { 1, 2, 1 }
    },
  
-//BLUR_3x3_G_int_095
+    //BLUR_3x3_G_int_095
    {
       { 1, 2, 1 },
       { 2, 3, 2 },
       { 1, 2, 1 }
    },
  
-//BLUR_3x3_G_int_090
+    //BLUR_3x3_G_int_090
    {
       { 1, 2, 1 },
       { 2, 3, 2 },
       { 1, 2, 1 }
    },
  
-//BLUR_3x3_G_int_085
+    //BLUR_3x3_G_int_085
    {
       { 1, 2, 1 },
       { 2, 4, 2 },
       { 1, 2, 1 }
    },
  
-//BLUR_3x3_G_int_080
+    //BLUR_3x3_G_int_080
    {
       { 1, 2, 1 },
       { 2, 5, 2 },
       { 1, 2, 1 }
    },
  
-//BLUR_3x3_G_int_075
+    //BLUR_3x3_G_int_075
    {
       { 1, 2, 1 },
       { 2, 6, 2 },
       { 1, 2, 1 }
    },
  
-//BLUR_3x3_G_int_070
+    //BLUR_3x3_G_int_070
    {
       { 1, 3, 1 },
       { 3, 8, 3 },
       { 1, 3, 1 }
    },
  
-//BLUR_3x3_G_int_065
+    //BLUR_3x3_G_int_065
    {
       { 1, 3, 1 },
       { 3, 11, 3 },
       { 1, 3, 1 }
    },
  
-//BLUR_3x3_G_int_060
+    //BLUR_3x3_G_int_060
    {
       { 1, 4, 1 },
       { 4, 16, 4 },
       { 1, 4, 1 }
    },
  
-//BLUR_3x3_G_int_055
+    //BLUR_3x3_G_int_055
    {
       { 1, 5, 1 },
       { 5, 27, 5 },
       { 1, 5, 1 }
    },
  
-//BLUR_3x3_G_int_050
+    //BLUR_3x3_G_int_050
    {
       { 1, 7, 1 },
       { 7, 55, 7 },
       { 1, 7, 1 }
    },
  
-//BLUR_3x3_G_int_045
+    //BLUR_3x3_G_int_045
    {
       { 1, 12, 1 },
       { 12, 140, 12 },
       { 1, 12, 1 }
    },
  
-//BLUR_3x3_G_int_040
+    //BLUR_3x3_G_int_040
    {
       { 1, 23, 1 },
       { 23, 518, 23 },
       { 1, 23, 1 }
    },
  
-//BLUR_3x3_G_int_035
+    //BLUR_3x3_G_int_035
    {
       { 1, 59, 1 },
       { 59, 3510, 59 },
       { 1, 59, 1 }
    },
  
-//BLUR_3x3_G_int_030
+    //BLUR_3x3_G_int_030
    {
       { 1, 259, 1 },
       { 259, 66910, 259 },
@@ -256,91 +256,91 @@ const int blur_3x3_gauss_int[16][3][3] = {
 };
 
 const int blur_3x3_pseudo_gauss[13][3][3] = {
-//BLUR_3x3_PseudoG_121
+    //BLUR_3x3_PseudoG_121
    {
       { 1, 2, 1 },
       { 2, 4, 2 },
       { 1, 2, 1 }
    },
  
-//BLUR_3x3_PseudoG_131
+    //BLUR_3x3_PseudoG_131
    {
       { 1, 3, 1 },
       { 3, 9, 3 },
       { 1, 3, 1 }
    },
  
-//BLUR_3x3_PseudoG_141
+    //BLUR_3x3_PseudoG_141
    {
       { 1, 4, 1 },
       { 4, 16, 4 },
       { 1, 4, 1 }
    },
  
-//BLUR_3x3_PseudoG_151
+    //BLUR_3x3_PseudoG_151
    {
       { 1, 5, 1 },
       { 5, 25, 5 },
       { 1, 5, 1 }
    },
  
-//BLUR_3x3_PseudoG_161
+    //BLUR_3x3_PseudoG_161
    {
       { 1, 6, 1 },
       { 6, 36, 6 },
       { 1, 6, 1 }
    },
  
-//BLUR_3x3_PseudoG_171
+    //BLUR_3x3_PseudoG_171
    {
       { 1, 7, 1 },
       { 7, 49, 7 },
       { 1, 7, 1 }
    },
  
-//BLUR_3x3_PseudoG_181
+    //BLUR_3x3_PseudoG_181
    {
       { 1, 8, 1 },
       { 8, 64, 8 },
       { 1, 8, 1 }
    },
  
-//BLUR_3x3_PseudoG_191
+    //BLUR_3x3_PseudoG_191
    {
       { 1, 9, 1 },
       { 9, 81, 9 },
       { 1, 9, 1 }
    },
  
-//BLUR_3x3_PseudoG_1101
+    //BLUR_3x3_PseudoG_1101
    {
       { 1, 10, 1 },
       { 10, 100, 10 },
       { 1, 10, 1 }
    },
  
-//BLUR_3x3_PseudoG_1111
+    //BLUR_3x3_PseudoG_1111
    {
       { 1, 11, 1 },
       { 11, 121, 11 },
       { 1, 11, 1 }
    },
  
-//BLUR_3x3_PseudoG_1121
+    //BLUR_3x3_PseudoG_1121
    {
       { 1, 12, 1 },
       { 12, 144, 12 },
       { 1, 12, 1 }
    },
  
-//BLUR_3x3_PseudoG_1131
+    //BLUR_3x3_PseudoG_1131
    {
       { 1, 13, 1 },
       { 13, 169, 13 },
       { 1, 13, 1 }
    },
  
-//BLUR_3x3_PseudoG_1141
+    //BLUR_3x3_PseudoG_1141
    {
       { 1, 14, 1 },
       { 14, 196, 14 },
@@ -378,85 +378,98 @@ const int blur_5x5_pseudo_gauss[3][5][5] = {
     }
 };
 
-const int blur_3x3_v0[3][3] = {
-  {1,1,1},
-  {1,1,1},
-  {1,1,1}
-};
-
-const int blur_3x3_v1[3][3] = {
-  {1,1,1},
+const int blur_3x3_emp[4][3][3] = {
+   // Emp_3x3_v0
+  {
+    {1,1,1},
+    {1,1,1},
+    {1,1,1}
+  },
+  
+  // Emp_3x3_v1
+  {
+    {1,2,1}, // Originally, this was v4. It was renamed with the removal of other filters
+    {2,3,2},
+    {1,2,1}
+  },
+  
+  // Emp_3x3_v2
+  {
+    {1,2,1}, // Originally, this was v5. It was renamed with the removal of other filters
+    {2,12,2},
+    {1,2,1}
+  },
+  
+  // Emp_3x3_v3
+  {
+    {1,1,1}, // Originally, this was v6. It was renamed with the removal of other filters
+    {1,8,1},
+    {1,1,1}
+  }  
+  
+  /* filters that were originally considered but eventually discarded */
+  /*
+  {1,1,1}, // Originally, this was v1. It was removed due to bad performance
   {1,3,1},
   {1,1,1}
-};
-
-const int blur_3x3_v2[3][3] = {
-  {1,1,1},
+    
+  {1,1,1}, // Originally, this was v2. It was removed due to bad performance
   {1,5,1},
   {1,1,1}
-};
-const int blur_3x3_v3[3][3] = {
-  {1,1,1},
+   
+  {1,1,1}, // Originally, this was v3. It was removed due to bad performance
   {1,2,1},
   {1,1,1}
-};
-const int blur_3x3_v4[3][3] = {
-  {1,2,1},
-  {2,3,2},
-  {1,2,1}
-};
-const int blur_3x3_v5[3][3] = {
-  {1,2,1},
-  {2,12,2},
-  {1,2,1}
-};
-const int blur_3x3_v6[3][3] = {
-  {1,1,1},
-  {1,8,1},
-  {1,1,1}
-};
-
-const int blur_5x5_v0[5][5] = {
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v1[5][5] = {
-  {1,1,1,1,1},
-  {1,1,1,1,1},
-  {1,1,5,1,1},
-  {1,1,1,1,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v2[5][5] = {
-  {1,1,1,1,1},
-  {1,2,2,2,1},
-  {1,2,3,2,1},
-  {1,2,2,2,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v3[5][5] = {
-  {1,1,1,1,1},
-  {1,2,2,2,1},
-  {1,2,5,2,1},
-  {1,2,2,2,1},
-  {1,1,1,1,1}
-};
-
-const int blur_5x5_v4[5][5] = {
-  {1,1,1,1,1},
-  {1,3,3,3,1},
-  {1,3,5,3,1},
-  {1,3,3,3,1},
-  {1,1,1,1,1}
+  */
 };
 
 
+const int blur_5x5_emp[5][5][5] = {
+   // Emp_5x5_v0
+  {
+    {1,1,1,1,1},
+    {1,1,1,1,1},
+    {1,1,1,1,1},
+    {1,1,1,1,1},
+    {1,1,1,1,1}
+  },
+  
+  // Emp_5x5_v1
+  {
+    {1,1,1,1,1},
+    {1,1,1,1,1},
+    {1,1,5,1,1},
+    {1,1,1,1,1},
+    {1,1,1,1,1}
+  },
+  
+  // Emp_5x5_v2
+  {
+    {1,1,1,1,1},
+    {1,2,2,2,1},
+    {1,2,3,2,1},
+    {1,2,2,2,1},
+    {1,1,1,1,1}
+  },
+  
+  // Emp_5x5_v3
+  {
+    {1,1,1,1,1},
+    {1,2,2,2,1},
+    {1,2,5,2,1},
+    {1,2,2,2,1},
+    {1,1,1,1,1}
+  },
+  
+  // Emp_5x5_v4
+  {
+    {1,1,1,1,1},
+    {1,3,3,3,1},
+    {1,3,5,3,1},
+    {1,3,3,3,1},
+    {1,1,1,1,1}
+  },
+};
 
 #endif /* CONVCOEFFS_H */
 

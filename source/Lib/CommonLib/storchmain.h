@@ -138,9 +138,6 @@ typedef enum
   BLUR_3x3_v1,
   BLUR_3x3_v2,
   BLUR_3x3_v3,
-  BLUR_3x3_v4,
-  BLUR_3x3_v5,
-  BLUR_3x3_v6,
 
   // Pseudo 5x5          
   BLUR_5x5_PseudoG_2_3,
